@@ -13,24 +13,34 @@ const checkAdmin = (req, res, next) => {
 
 // Admin login
 router.post('/login', async (req, res) => {
+    console.log('--- [DEBUG] Iniciando /api/admin/login ---');
     const { password } = req.body;
     const adminPasswordHash = req.adminPasswordHash;
 
+    console.log(`[DEBUG] Contraseña recibida: ${password ? 'Sí' : 'No'}`);
+    console.log(`[DEBUG] Hash de contraseña del servidor disponible: ${adminPasswordHash ? 'Sí' : 'No'}`);
+
     if (!password || !adminPasswordHash) {
-        return res.status(400).json({ error: 'La configuración del servidor es incorrecta.' });
+        console.log('[DEBUG] Error: Faltan datos para el login (contraseña o hash).');
+        return res.status(400).json({ error: 'La configuración del servidor es incorrecta o falta la contraseña.' });
     }
 
     try {
+        console.log('[DEBUG] Intentando comparar contraseñas con bcrypt...');
         const match = await bcrypt.compare(password, adminPasswordHash);
+        console.log(`[DEBUG] bcrypt.compare completado. Coincidencia: ${match}`);
+
         if (match) {
             req.session.isAdmin = true;
-            res.json({ success: true, message: 'Inicio de sesión exitoso.' });
+            console.log('[DEBUG] Login de admin exitoso. Sesión establecida.');
+            return res.json({ success: true, message: 'Inicio de sesión exitoso.' });
         } else {
-            res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
+            console.log('[DEBUG] Contraseña de admin incorrecta.');
+            return res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
         }
     } catch (err) {
-        console.error('Error durante el inicio de sesión del administrador:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        console.error('--- [DEBUG] ¡ERROR CATASTRÓFICO EN LOGIN DE ADMIN! ---', err);
+        return res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
@@ -140,94 +150,9 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
     }
 });
 
-// Add new route
-router.post('/routes', checkAdmin, async (req, res) => {
-    const { origin, destination, distance_km, base_price } = req.body;
-    const db = req.db;
-
-    if (!origin || !destination || !distance_km || !base_price) {
-        return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    try {
-        const result = await db.query(`
-            INSERT INTO routes (origin, destination, distance_km, base_price)
-            VALUES ($1, $2, $3, $4)
-            RETURNING *
-        `, [origin, destination, distance_km, base_price]);
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error al agregar ruta:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
-// Add new bus
-router.post('/buses', checkAdmin, async (req, res) => {
-    const { bus_number, capacity, bus_type } = req.body;
-    const db = req.db;
-
-    if (!bus_number || !capacity || !bus_type) {
-        return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    try {
-        const busResult = await db.query(`
-            INSERT INTO buses (bus_number, capacity, type)
-            VALUES ($1, $2, $3)
-            RETURNING *
-        `, [bus_number, capacity, bus_type]);
-
-        const busId = busResult.rows[0].id;
-
-        const seatPromises = [];
-        for (let i = 1; i <= capacity; i++) {
-            const seatNumber = i.toString().padStart(2, '0');
-            const isPremium = (bus_type === 'ejecutivo' && i <= 12) || (bus_type === 'primera_clase' && i <= 8);
-            const seatType = isPremium ? 'premium' : 'standard';
-            const priceModifier = isPremium ? 1.25 : 1.0;
-            
-            seatPromises.push(db.query(`
-                INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier)
-                VALUES ($1, $2, $3, $4)
-            `, [busId, seatNumber, seatType, priceModifier]));
-        }
-
-        await Promise.all(seatPromises);
-
-        res.json(busResult.rows[0]);
-    } catch (err) {
-        console.error('Error al agregar autobús:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
-// Add new schedule
-router.post('/schedules', checkAdmin, async (req, res) => {
-    const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier } = req.body;
-    const db = req.db;
-
-    if (!route_id || !bus_id || !departure_time || !arrival_time || !days_of_week) {
-        return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    try {
-        const result = await db.query(`
-            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
-        `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier || 1.0]);
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error al agregar horario:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
 // Get all routes for admin
 router.get('/routes', checkAdmin, async (req, res) => {
     const db = req.db;
-
     try {
         const result = await db.query('SELECT * FROM routes ORDER BY origin, destination');
         res.json(result.rows);
@@ -237,38 +162,9 @@ router.get('/routes', checkAdmin, async (req, res) => {
     }
 });
 
-// Update a route
-router.put('/routes/:id', checkAdmin, async (req, res) => {
-    const { id } = req.params;
-    const { origin, destination, distance_km, base_price } = req.body;
-
-    if (!origin || !destination || !distance_km || !base_price) {
-        return res.status(400).json({ error: 'Todos los campos son requeridos' });
-    }
-
-    try {
-        const result = await req.db.query(`
-            UPDATE routes
-            SET origin = $1, destination = $2, distance_km = $3, base_price = $4
-            WHERE id = $5
-            RETURNING *
-        `, [origin, destination, distance_km, base_price, id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Ruta no encontrada' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error al actualizar ruta:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
 // Get all buses for admin
 router.get('/buses', checkAdmin, async (req, res) => {
     const db = req.db;
-
     try {
         const result = await db.query('SELECT * FROM buses ORDER BY bus_number');
         res.json(result.rows);
@@ -281,7 +177,6 @@ router.get('/buses', checkAdmin, async (req, res) => {
 // Get all schedules for admin
 router.get('/schedules', checkAdmin, async (req, res) => {
     const db = req.db;
-
     try {
         const result = await db.query(`
             SELECT 
