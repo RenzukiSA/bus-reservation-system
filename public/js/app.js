@@ -1182,13 +1182,15 @@ async function checkAuthStatus() {
     }
 }
 
-// Reemplaza tu función handleAdminLogin existente con esta:
+// Reemplaza tu función handleAdminLogin existente con esta versión corregida:
 async function handleAdminLogin(event) {
     event.preventDefault();
-    const password = document.getElementById('admin-password').value;
-    const errorDiv = document.getElementById('admin-login-error');
-    errorDiv.style.display = 'none';
-    errorDiv.textContent = '';
+    // Usando los IDs correctos de tu HTML
+    const password = document.getElementById('adminPassword').value;
+    const errorEl = document.getElementById('loginError');
+    
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
 
     try {
         const response = await fetch('/api/admin/login', {
@@ -1197,25 +1199,24 @@ async function handleAdminLogin(event) {
             body: JSON.stringify({ password })
         });
 
-        // El servidor respondió, pero quizás con un error (ej: 401 Contraseña incorrecta)
         if (!response.ok) {
-            const result = await response.json().catch(() => ({ error: `El servidor respondió con un error ${response.status}, pero el cuerpo no es JSON válido.` }));
+            const result = await response.json().catch(() => ({ error: `El servidor respondió con un error ${response.status}` }));
             throw new Error(result.error || `Error del servidor: ${response.status}`);
         }
 
         const result = await response.json();
         if (result.success) {
-            window.location.href = '/admin.html'; // Redirigir al panel de admin
+            // Si el login es exitoso, redirigimos al panel de administrador
+            window.location.href = '/admin.html';
         } else {
-            // Esto no debería ocurrir si response.ok es true, pero es una salvaguarda
-            throw new Error(result.error || 'Ocurrió un error desconocido durante el inicio de sesión.');
+            throw new Error(result.error || 'Ocurrió un error desconocido.');
         }
 
     } catch (error) {
-        // Hubo un fallo de red, CORS, o el servidor no respondió en absoluto.
-        console.error('FALLO CRÍTICO DE CONEXIÓN:', error);
-        errorDiv.textContent = `Error de conexión. Detalles: ${error.message}. Revisa la consola del navegador (F12) para más información.`;
-        errorDiv.style.display = 'block';
+        // Si hay un fallo de red o CORS, se mostrará aquí
+        console.error('FALLO DE CONEXIÓN EN LOGIN:', error);
+        errorEl.textContent = `Error de conexión: ${error.message}`;
+        errorEl.classList.remove('hidden');
     }
 }
 
