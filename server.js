@@ -38,6 +38,8 @@ async function startServer() {
         // 3. Configurar middlewares
         app.use(cors());
         app.use(express.json());
+        
+        // Servir archivos estáticos desde la carpeta 'public'
         app.use(express.static(path.join(__dirname, 'public')));
 
         // Middleware para la conexión a la DB
@@ -72,15 +74,7 @@ async function startServer() {
         app.use('/api/buses', busRoutes);
         app.use('/api/reservations', reservationRoutes);
         app.use('/api/admin', adminRoutes);
-
-        // Servir archivos estáticos de React en producción
-        if (process.env.NODE_ENV === 'production') {
-            app.use(express.static(path.join(__dirname, 'client/build')));
-            app.get('*', (req, res) => {
-                res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-            });
-        }
-
+        
         // 5. Iniciar el servidor
         app.listen(PORT, () => {
             console.log(`Servidor corriendo en el puerto ${PORT}`);
