@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Reservas de Autobuses</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-bus"></i>
+                <h1>Transportes Express</h1>
+            </div>
+            <nav class="nav">
+                <a href="#home" class="nav-link active">Inicio</a>
+                <a href="#reservations" class="nav-link">Mis Reservas</a>
+                <a href="#admin" class="nav-link">Admin</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Home Section -->
+        <section id="home" class="section active">
+            <div class="container">
+                <div class="hero">
+                    <h2>Reserva tu viaje de manera fácil y segura</h2>
+                    <p>Selecciona tu ruta, fecha y asientos. ¡Viaja cómodo con nosotros!</p>
+                </div>
+
+                <!-- Search Form -->
+                <div class="search-card">
+                    <h3><i class="fas fa-search"></i> Buscar Viajes</h3>
+                    <form id="searchForm" class="search-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="origin">Origen</label>
+                                <select id="origin" required>
+                                    <option value="">Selecciona origen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="destination">Destino</label>
+                                <select id="destination" required>
+                                    <option value="">Selecciona destino</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="travelDate">Fecha de viaje</label>
+                                <input type="date" id="travelDate" required>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Loading -->
+                <div id="loading" class="loading hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Buscando viajes disponibles...</p>
+                </div>
+
+                <!-- Search Results -->
+                <div id="searchResults" class="search-results hidden">
+                    <h3><i class="fas fa-list"></i> Viajes Disponibles</h3>
+                    <div id="schedulesList" class="schedules-list"></div>
+                </div>
+
+                <!-- Seat Selection -->
+                <div id="seatSelection" class="seat-selection hidden">
+                    <div class="seat-selection-header">
+                        <button id="backToResults" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Volver
+                        </button>
+                        <h3 id="selectedScheduleInfo"></h3>
+                    </div>
+                    
+                    <div class="reservation-options">
+                        <div class="option-card">
+                            <input type="radio" id="reserveSeats" name="reservationType" value="seats" checked>
+                            <label for="reserveSeats">
+                                <i class="fas fa-chair"></i>
+                                <span>Reservar Asientos</span>
+                                <small>Selecciona asientos individuales</small>
+                            </label>
+                        </div>
+                        <div class="option-card">
+                            <input type="radio" id="reserveFullBus" name="reservationType" value="full_bus">
+                            <label for="reserveFullBus">
+                                <i class="fas fa-bus"></i>
+                                <span>Autobús Completo</span>
+                                <small>Reserva todo el autobús</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="seatMapContainer" class="seat-map-container">
+                        <div class="bus-layout">
+                            <div class="bus-front">
+                                <i class="fas fa-steering-wheel"></i>
+                                <span>Conductor</span>
+                            </div>
+                            <div id="seatMap" class="seat-map"></div>
+                            <div class="seat-legend">
+                                <div class="legend-item">
+                                    <div class="seat-demo available"></div>
+                                    <span>Disponible</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="seat-demo selected"></div>
+                                    <span>Seleccionado</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="seat-demo occupied"></div>
+                                    <span>Ocupado</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="seat-demo premium"></div>
+                                    <span>Premium</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="price-summary">
+                        <div class="selected-seats-info">
+                            <h4>Asientos Seleccionados: <span id="selectedSeatsCount">0</span></h4>
+                            <div id="selectedSeatsList"></div>
+                        </div>
+                        <div class="total-price">
+                            <h3>Total: $<span id="totalPrice">0.00</span></h3>
+                        </div>
+                        <button id="proceedToReservation" class="btn btn-primary btn-large" disabled>
+                            <i class="fas fa-credit-card"></i> Proceder con la Reserva
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reservation Form -->
+                <div id="reservationForm" class="reservation-form hidden">
+                    <h3><i class="fas fa-user"></i> Información del Pasajero</h3>
+                    <form id="customerForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="customerName">Nombre Completo *</label>
+                                <input type="text" id="customerName" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="customerPhone">Teléfono *</label>
+                                <input type="tel" id="customerPhone" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="customerEmail">Email (opcional)</label>
+                            <input type="email" id="customerEmail">
+                        </div>
+                        
+                        <div class="reservation-summary">
+                            <h4>Resumen de Reserva</h4>
+                            <div id="reservationSummary"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-large">
+                            <i class="fas fa-check"></i> Confirmar Reserva
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Payment Instructions -->
+                <div id="paymentInstructions" class="payment-instructions hidden">
+                    <div class="success-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>¡Reserva Creada Exitosamente!</h3>
+                    <div class="reservation-details">
+                        <p><strong>ID de Reserva:</strong> <span id="reservationId"></span></p>
+                        <p><strong>Total a Pagar:</strong> $<span id="finalPrice"></span></p>
+                        <p><strong>Tiempo límite:</strong> <span id="paymentDeadline"></span></p>
+                    </div>
+                    
+                    <div class="payment-steps">
+                        <h4><i class="fas fa-whatsapp"></i> Instrucciones de Pago</h4>
+                        <ol>
+                            <li>Realiza el pago por transferencia bancaria o depósito</li>
+                            <li>Toma una foto del comprobante de pago</li>
+                            <li>Envía el comprobante por WhatsApp al número: <strong id="whatsappNumber"></strong></li>
+                            <li>Incluye tu ID de reserva en el mensaje</li>
+                        </ol>
+                        
+                        <div class="timer-container">
+                            <div class="timer">
+                                <i class="fas fa-clock"></i>
+                                <span>Tiempo restante: </span>
+                                <span id="countdown">15:00</span>
+                            </div>
+                        </div>
+                        
+                        <a id="whatsappLink" class="btn btn-whatsapp" target="_blank">
+                            <i class="fab fa-whatsapp"></i> Enviar por WhatsApp
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Reservations Section -->
+        <section id="reservations" class="section">
+            <div class="container">
+                <h2><i class="fas fa-ticket-alt"></i> Consultar Reserva</h2>
+                <div class="search-card">
+                    <form id="reservationSearchForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="searchReservationId">ID de Reserva</label>
+                                <input type="text" id="searchReservationId" placeholder="Ingresa tu ID de reserva" required>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div id="reservationDetails" class="reservation-details-card hidden"></div>
+            </div>
+        </section>
+
+        <!-- Admin Section -->
+        <section id="admin" class="section">
+            <div class="container">
+                <h2><i class="fas fa-cog"></i> Panel Administrativo</h2>
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+                    <button class="tab-btn" data-tab="reservations-admin">Reservas</button>
+                    <button class="tab-btn" data-tab="routes-admin">Rutas</button>
+                    <button class="tab-btn" data-tab="buses-admin">Autobuses</button>
+                </div>
+                
+                <div id="dashboard" class="tab-content active">
+                    <div class="dashboard-stats" id="dashboardStats"></div>
+                </div>
+                
+                <div id="reservations-admin" class="tab-content">
+                    <div class="admin-section">
+                        <h3>Gestión de Reservas</h3>
+                        <div id="adminReservations"></div>
+                    </div>
+                </div>
+                
+                <div id="routes-admin" class="tab-content">
+                    <div class="admin-section">
+                        <h3>Gestión de Rutas</h3>
+                        <div id="adminRoutes"></div>
+                    </div>
+                </div>
+                
+                <div id="buses-admin" class="tab-content">
+                    <div class="admin-section">
+                        <h3>Gestión de Autobuses</h3>
+                        <div id="adminBuses"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Transportes Express. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Modal -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Edit Route Modal -->
+    <div id="editRouteModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeEditRouteModal()">&times;</span>
+            <h3>Editar Ruta</h3>
+            <form id="editRouteForm" class="form-card">
+                <input type="hidden" id="editRouteId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editRouteOrigin">Origen</label>
+                        <input type="text" id="editRouteOrigin" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRouteDestination">Destino</label>
+                        <input type="text" id="editRouteDestination" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editRouteDistance">Distancia (km)</label>
+                        <input type="number" id="editRouteDistance" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRoutePrice">Precio Base</label>
+                        <input type="number" step="0.01" id="editRoutePrice" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Guardar Cambios</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditRouteModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="adminLoginModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Acceso de Administrador</h3>
+            <form id="adminLoginForm" class="form-card">
+                <div class="form-group">
+                    <label for="adminPassword">Contraseña</label>
+                    <input type="password" id="adminPassword" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                </div>
+                <p id="loginError" class="error-message hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
