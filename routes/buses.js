@@ -42,7 +42,14 @@ router.get('/schedules', async (req, res) => {
         const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
         
         const schedulesQuery = `
-            SELECT s.id, s.departure_time, s.arrival_time, b.type as bus_type, b.capacity, r.base_price * s.price_multiplier as final_price
+            SELECT 
+                s.id as schedule_id, 
+                s.departure_time, 
+                s.arrival_time, 
+                b.type as bus_type, 
+                b.capacity, 
+                b.bus_number,
+                r.base_price * s.price_multiplier as base_total_price
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             JOIN buses b ON s.bus_id = b.id
@@ -58,7 +65,7 @@ router.get('/schedules', async (req, res) => {
         const schedulesWithAvailability = await Promise.all(schedules.map(async (schedule) => {
             const reservationsResult = await req.db.query(
                 `SELECT reservation_type, seats_reserved FROM reservations WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')`,
-                [schedule.id, date]
+                [schedule.schedule_id, date]
             );
 
             let reservedSeatIds = [];
@@ -75,7 +82,7 @@ router.get('/schedules', async (req, res) => {
                 ...schedule,
                 available_seats: availableSeats,
                 is_full_bus_available: isFullBusAvailable,
-                full_bus_price: (schedule.final_price * schedule.capacity * 0.9).toFixed(2)
+                full_bus_price: (schedule.base_total_price * schedule.capacity * 0.9).toFixed(2)
             };
         }));
 
@@ -88,31 +95,56 @@ router.get('/schedules', async (req, res) => {
 });
 
 // Obtener el estado de los asientos para un horario y fecha específicos
-router.get('/seats', async (req, res) => {
-    const { schedule_id, date } = req.query;
+router.get('/seats/:schedule_id', async (req, res) => {
+    const { schedule_id } = req.params;
+    const { date } = req.query;
+
     if (!schedule_id || !date) {
         return res.status(400).json({ error: 'Faltan parámetros: schedule_id o date' });
     }
 
-    const query = `
-        SELECT s.id, s.seat_number, s.seat_type, s.price_modifier,
-               CASE WHEN res.id IS NOT NULL THEN 'occupied' ELSE 'available' END as status
-        FROM seats s
-        JOIN schedules sch ON s.bus_id = sch.bus_id
-        LEFT JOIN reservations res ON res.schedule_id = sch.id 
-                                  AND res.reservation_date = $2
-                                  AND res.status IN ('confirmed', 'pending')
-                                  AND (res.seats_reserved LIKE CONCAT('%"', s.id, '"%') OR res.reservation_type = 'full_bus')
-        WHERE sch.id = $1
-        ORDER BY s.id;
-    `;
-
     try {
-        const result = await req.db.query(query, [schedule_id, date]);
-        res.json(result.rows);
+        // Primero, obtener el bus_id del schedule
+        const scheduleRes = await req.db.query('SELECT bus_id FROM schedules WHERE id = $1', [schedule_id]);
+        if (scheduleRes.rowCount === 0) {
+            return res.status(404).json({ error: 'Horario no encontrado' });
+        }
+        const busId = scheduleRes.rows[0].bus_id;
+
+        // Obtener todos los asientos para ese bus
+        const seatsRes = await req.db.query('SELECT id, seat_number, seat_type, price_modifier FROM seats WHERE bus_id = $1 ORDER BY id', [busId]);
+        const allSeats = seatsRes.rows;
+
+        // Obtener las reservas para ese horario y fecha
+        const reservationsRes = await req.db.query(
+            `SELECT reservation_type, seats_reserved FROM reservations WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')`,
+            [schedule_id, date]
+        );
+
+        let reservedSeatIds = new Set();
+        let hasFullBusReservation = false;
+        reservationsRes.rows.forEach(r => {
+            if (r.reservation_type === 'full_bus') {
+                hasFullBusReservation = true;
+            } else if (r.seats_reserved) {
+                JSON.parse(r.seats_reserved).forEach(id => reservedSeatIds.add(id));
+            }
+        });
+
+        // Mapear los asientos con su disponibilidad
+        const seatsWithStatus = allSeats.map(seat => ({
+            ...seat,
+            is_available: !hasFullBusReservation && !reservedSeatIds.has(seat.id)
+        }));
+
+        res.json({
+            seats: seatsWithStatus,
+            has_full_bus_reservation: hasFullBusReservation
+        });
+
     } catch (err) {
-        console.error('Error al obtener los asientos:', err.message);
-        res.status(500).json({ error: 'Error al obtener los asientos' });
+        console.error('Error al obtener los asientos:', err);
+        res.status(500).json({ error: 'Error interno del servidor al obtener los asientos' });
     }
 });
 
