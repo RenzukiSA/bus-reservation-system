@@ -121,19 +121,25 @@ function setMinDate() {
 async function loadRoutes() {
     try {
         const response = await fetch(`${API_BASE}/buses/routes`);
+        if (!response.ok) throw new Error('Failed to fetch routes');
         const routes = await response.json();
-        
-        // Populate origin select
+
+        // Store the flat array of routes
+        window.routesData = routes;
+
+        // Populate origin select with unique origins
+        const origins = [...new Set(routes.map(r => r.origin))].sort();
         originSelect.innerHTML = '<option value="">Selecciona origen</option>';
-        Object.keys(routes).forEach(origin => {
+        origins.forEach(origin => {
             const option = document.createElement('option');
             option.value = origin;
             option.textContent = origin;
             originSelect.appendChild(option);
         });
-        
-        // Store routes for destination updates
-        window.routesData = routes;
+
+        // Initially, no destination is selected
+        destinationSelect.innerHTML = '<option value="">Selecciona destino</option>';
+
     } catch (error) {
         console.error('Error loading routes:', error);
         showError('Error al cargar las rutas disponibles');
@@ -143,9 +149,14 @@ async function loadRoutes() {
 function updateDestinations() {
     const selectedOrigin = originSelect.value;
     destinationSelect.innerHTML = '<option value="">Selecciona destino</option>';
-    
-    if (selectedOrigin && window.routesData[selectedOrigin]) {
-        window.routesData[selectedOrigin].forEach(destination => {
+
+    if (selectedOrigin && Array.isArray(window.routesData)) {
+        const destinations = window.routesData
+            .filter(route => route.origin === selectedOrigin)
+            .map(route => route.destination)
+            .sort();
+        
+        [...new Set(destinations)].forEach(destination => {
             const option = document.createElement('option');
             option.value = destination;
             option.textContent = destination;
@@ -663,33 +674,49 @@ function showAdminTab(tabId) {
 async function loadAdminDashboard() {
     try {
         const response = await fetch(`${API_BASE}/admin/dashboard`);
+        if (!response.ok) {
+            throw new Error(`Error de red: ${response.statusText}`);
+        }
         const data = await response.json();
-        
+
+        // Defensive checks to ensure data is in the expected format
+        const reservationsByStatus = Array.isArray(data.reservations_by_status) ? data.reservations_by_status : [];
+        const monthlyRevenue = Array.isArray(data.monthly_revenue) ? data.monthly_revenue : [];
+
+        const totalReservations = reservationsByStatus.reduce((sum, item) => sum + (parseInt(item.count, 10) || 0), 0);
+        const confirmedCount = reservationsByStatus.find(item => item.status === 'confirmed')?.count || 0;
+        const pendingCount = reservationsByStatus.find(item => item.status === 'pending')?.count || 0;
+        const currentMonthRevenue = monthlyRevenue[0]?.revenue || '0.00';
+
         const statsDiv = document.getElementById('dashboardStats');
         statsDiv.innerHTML = `
             <div class="stat-card">
                 <i class="fas fa-ticket-alt" style="color: #3498db;"></i>
-                <h3>${data.reservations_by_status.reduce((sum, item) => sum + item.count, 0)}</h3>
+                <h3>${totalReservations}</h3>
                 <p>Total Reservas</p>
             </div>
             <div class="stat-card">
                 <i class="fas fa-check-circle" style="color: #27ae60;"></i>
-                <h3>${data.reservations_by_status.find(item => item.status === 'confirmed')?.count || 0}</h3>
+                <h3>${confirmedCount}</h3>
                 <p>Confirmadas</p>
             </div>
             <div class="stat-card">
                 <i class="fas fa-clock" style="color: #f39c12;"></i>
-                <h3>${data.reservations_by_status.find(item => item.status === 'pending')?.count || 0}</h3>
+                <h3>${pendingCount}</h3>
                 <p>Pendientes</p>
             </div>
             <div class="stat-card">
                 <i class="fas fa-dollar-sign" style="color: #e74c3c;"></i>
-                <h3>$${data.monthly_revenue[0]?.revenue || 0}</h3>
+                <h3>$${parseFloat(currentMonthRevenue).toFixed(2)}</h3>
                 <p>Ingresos del Mes</p>
             </div>
         `;
     } catch (error) {
         console.error('Error loading dashboard:', error);
+        const statsDiv = document.getElementById('dashboardStats');
+        if (statsDiv) {
+            statsDiv.innerHTML = `<div class="error-message"><p>Error de conexión con el servidor al cargar el dashboard.</p></div>`;
+        }
     }
 }
 
