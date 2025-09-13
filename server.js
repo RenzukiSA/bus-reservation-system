@@ -19,36 +19,30 @@ const bcrypt = require('bcrypt');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de la base de datos PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Función para iniciar el servidor
 async function startServer() {
     try {
-        // 1. Inicializar la base de datos
         await initDatabase(pool);
-
-        // 2. Cifrar la contraseña del administrador
         const adminPasswordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
         console.log('Admin password hashed and ready.');
 
-        // 3. Configurar middlewares
         app.use(cors());
         app.use(express.json());
-        
-        // Servir archivos estáticos desde la carpeta 'public'
         app.use(express.static(path.join(__dirname, 'public')));
+        
+        // --- INICIO DE CAMBIO FINAL EN LA SESIÓN ---
+        // Confiar en el proxy de Render
+        app.set('trust proxy', 1); 
 
-        // Middleware para la conexión a la DB
         app.use((req, res, next) => {
             req.db = pool;
             next();
         });
 
-        // Middleware para la sesión
         app.use(session({
             store: new pgSession({
                 pool: pool,
@@ -58,24 +52,24 @@ async function startServer() {
             resave: false,
             saveUninitialized: false,
             cookie: {
-                secure: process.env.NODE_ENV === 'production',
+                secure: true, // Forzar HTTPS
                 httpOnly: true,
-                maxAge: 24 * 60 * 60 * 1000 // 24 hours
+                maxAge: 24 * 60 * 60 * 1000, // 24 hours
+                sameSite: 'none', // Permitir cookies entre diferentes sitios (necesario para 'secure: true')
+                domain: '.onrender.com' // Especificar el dominio
             }
         }));
+        // --- FIN DE CAMBIO FINAL EN LA SESIÓN ---
 
-        // Middleware para pasar el hash de la contraseña a las rutas
         app.use((req, res, next) => {
             req.adminPasswordHash = adminPasswordHash;
             next();
         });
 
-        // 4. Configurar las rutas de la API
         app.use('/api/buses', busRoutes);
         app.use('/api/reservations', reservationRoutes);
         app.use('/api/admin', adminRoutes);
         
-        // 5. Iniciar el servidor
         app.listen(PORT, () => {
             console.log(`Servidor corriendo en el puerto ${PORT}`);
         });
@@ -86,7 +80,6 @@ async function startServer() {
     }
 }
 
-// Ejecutar la función de inicio
 startServer();
 
 module.exports = app;
