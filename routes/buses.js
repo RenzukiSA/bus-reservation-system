@@ -33,8 +33,7 @@ router.get('/schedules', async (req, res) => {
         return res.status(400).json({ error: 'Origin, destination, and date are required' });
     }
     
-    const normalizedOrigin = normalizeString(origin);
-    const normalizedDestination = normalizeString(destination);
+    const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
 
     const query = `
         SELECT 
@@ -51,12 +50,12 @@ router.get('/schedules', async (req, res) => {
         FROM schedules s
         JOIN routes r ON s.route_id = r.id
         JOIN buses b ON s.bus_id = b.id
-        WHERE r.origin = $1 AND r.destination = $2
+        WHERE r.origin ILIKE $1 AND r.destination ILIKE $2
           AND (s.days_of_week LIKE '%"daily"%' OR s.days_of_week LIKE $3)
     `;
 
     try {
-        const result = await req.db.query(query, [normalizedOrigin, normalizedDestination, `%"${new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()}"%`]);
+        const result = await req.db.query(query, [origin, destination, `%"${dayOfWeek}"%`]);
         const schedulePromises = result.rows.map(schedule => {
             return new Promise((resolve) => {
                 // Get reserved seats for this schedule and date
