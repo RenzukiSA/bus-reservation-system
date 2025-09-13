@@ -40,7 +40,7 @@ router.post('/logout', (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'No se pudo cerrar la sesión.' });
         }
-        res.clearCookie('connect.sid'); // El nombre de la cookie puede variar
+        res.clearCookie('connect.sid');
         res.json({ success: true, message: 'Sesión cerrada exitosamente.' });
     });
 });
@@ -173,7 +173,7 @@ router.post('/buses', checkAdmin, async (req, res) => {
 
     try {
         const busResult = await db.query(`
-            INSERT INTO buses (bus_number, capacity, bus_type)
+            INSERT INTO buses (bus_number, capacity, type)
             VALUES ($1, $2, $3)
             RETURNING *
         `, [bus_number, capacity, bus_type]);
