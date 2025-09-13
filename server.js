@@ -13,6 +13,7 @@ const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
 
 const app = express();
@@ -30,25 +31,26 @@ app.use((req, res, next) => {
     next();
 });
 
+// Session Middleware with PostgreSQL store
+app.use(session({
+    store: new pgSession({
+        pool: pool,                // Connection pool
+        tableName: 'user_sessions'   // Table name for sessions
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
-app.use(express.urlencoded({ extended: true }));
-
-// Session Middleware
-app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: true,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
-}));
-
-// Set response headers to prevent encoding issues
-app.use((req, res, next) => {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    next();
-});
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Hash admin password on startup
 let adminPasswordHash;
