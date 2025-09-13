@@ -95,97 +95,53 @@ router.get('/reservations', checkAdmin, async (req, res) => {
 });
 
 // Get dashboard statistics
-router.get('/dashboard', checkAdmin, (req, res) => {
-    const db = req.db;
+router.get('/dashboard', checkAdmin, async (req, res) => {
+    try {
+        const db = req.db;
 
-    const stats = {};
-
-    // Get total reservations by status
-    db.all(`
-        SELECT status, COUNT(*) as count
-        FROM reservations
-        GROUP BY status
-    `, (err, statusCounts) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-
-        stats.reservations_by_status = statusCounts;
-
-        // Get revenue by month
-        db.all(`
+        const statusQuery = `SELECT status, COUNT(*) as count FROM reservations GROUP BY status`;
+        const revenueQuery = `
             SELECT 
-                strftime('%Y-%m', created_at) as month,
-                SUM(total_price) as revenue,
-                COUNT(*) as reservations
+                EXTRACT(YEAR FROM created_at) as year,
+                EXTRACT(MONTH FROM created_at) as month,
+                SUM(total_price) as revenue
             FROM reservations
             WHERE status = 'confirmed'
-            GROUP BY strftime('%Y-%m', created_at)
-            ORDER BY month DESC
+            GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+            ORDER BY year DESC, month DESC
             LIMIT 12
-        `, (err, monthlyRevenue) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
+        `;
+        const popularRoutesQuery = `
+            SELECT r.origin, r.destination, COUNT(res.id) as reservations
+            FROM reservations res
+            JOIN schedules s ON res.schedule_id = s.id
+            JOIN routes r ON s.route_id = r.id
+            WHERE res.status = 'confirmed'
+            GROUP BY r.origin, r.destination
+            ORDER BY reservations DESC
+            LIMIT 10
+        `;
 
-            stats.monthly_revenue = monthlyRevenue;
+        const [statusResult, revenueResult, popularRoutesResult] = await Promise.all([
+            db.query(statusQuery),
+            db.query(revenueQuery),
+            db.query(popularRoutesQuery)
+        ]);
 
-            // Get popular routes
-            db.all(`
-                SELECT 
-                    r.origin,
-                    r.destination,
-                    COUNT(*) as reservations,
-                    SUM(res.total_price) as total_revenue
-                FROM reservations res
-                JOIN schedules s ON res.schedule_id = s.id
-                JOIN routes r ON s.route_id = r.id
-                WHERE res.status = 'confirmed'
-                GROUP BY r.origin, r.destination
-                ORDER BY reservations DESC
-                LIMIT 10
-            `, (err, popularRoutes) => {
-                if (err) {
-                    return res.status(500).json({ error: err.message });
-                }
-
-                stats.popular_routes = popularRoutes;
-
-                // Get bus utilization
-                db.all(`
-                    SELECT 
-                        b.bus_number,
-                        b.bus_type,
-                        COUNT(res.id) as total_reservations,
-                        AVG(
-                            CASE 
-                                WHEN res.reservation_type = 'full_bus' THEN b.capacity
-                                ELSE (
-                                    SELECT COUNT(*) 
-                                    FROM json_each(res.seats_reserved)
-                                )
-                            END
-                        ) as avg_seats_per_trip
-                    FROM buses b
-                    LEFT JOIN schedules s ON b.id = s.bus_id
-                    LEFT JOIN reservations res ON s.id = res.schedule_id AND res.status = 'confirmed'
-                    GROUP BY b.id, b.bus_number, b.bus_type
-                    ORDER BY total_reservations DESC
-                `, (err, busUtilization) => {
-                    if (err) {
-                        return res.status(500).json({ error: err.message });
-                    }
-
-                    stats.bus_utilization = busUtilization;
-                    res.json(stats);
-                });
-            });
+        res.json({
+            reservations_by_status: statusResult.rows,
+            monthly_revenue: revenueResult.rows,
+            popular_routes: popularRoutesResult.rows
         });
-    });
+
+    } catch (err) {
+        console.error('Error al obtener estadísticas del dashboard:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Add new route
-router.post('/routes', checkAdmin, (req, res) => {
+router.post('/routes', checkAdmin, async (req, res) => {
     const { origin, destination, distance_km, base_price } = req.body;
     const db = req.db;
 
@@ -193,23 +149,21 @@ router.post('/routes', checkAdmin, (req, res) => {
         return res.status(400).json({ error: 'All fields are required' });
     }
 
-    db.run(`
-        INSERT INTO routes (origin, destination, distance_km, base_price)
-        VALUES (?, ?, ?, ?)
-    `, [origin, destination, distance_km, base_price], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-
-        res.json({
-            id: this.lastID,
-            message: 'Route added successfully'
-        });
-    });
+    try {
+        const result = await db.query(`
+            INSERT INTO routes (origin, destination, distance_km, base_price)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `, [origin, destination, distance_km, base_price]);
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al agregar ruta:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Add new bus
-router.post('/buses', checkAdmin, (req, res) => {
+router.post('/buses', checkAdmin, async (req, res) => {
     const { bus_number, capacity, bus_type } = req.body;
     const db = req.db;
 
@@ -217,42 +171,39 @@ router.post('/buses', checkAdmin, (req, res) => {
         return res.status(400).json({ error: 'All fields are required' });
     }
 
-    db.run(`
-        INSERT INTO buses (bus_number, capacity, bus_type)
-        VALUES (?, ?, ?)
-    `, [bus_number, capacity, bus_type], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
+    try {
+        const busResult = await db.query(`
+            INSERT INTO buses (bus_number, capacity, bus_type)
+            VALUES ($1, $2, $3)
+            RETURNING *
+        `, [bus_number, capacity, bus_type]);
 
-        const busId = this.lastID;
+        const busId = busResult.rows[0].id;
 
-        // Create seats for the new bus
         const seatPromises = [];
         for (let i = 1; i <= capacity; i++) {
             const seatNumber = i.toString().padStart(2, '0');
-            const seatType = i <= 4 ? 'premium' : 'standard';
-            const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
+            const isPremium = (bus_type === 'ejecutivo' && i <= 12) || (bus_type === 'primera_clase' && i <= 8);
+            const seatType = isPremium ? 'premium' : 'standard';
+            const priceModifier = isPremium ? 1.25 : 1.0;
             
-            seatPromises.push(new Promise((resolve) => {
-                db.run(`
-                    INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier)
-                    VALUES (?, ?, ?, ?)
-                `, [busId, seatNumber, seatType, priceModifier], resolve);
-            }));
+            seatPromises.push(db.query(`
+                INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier)
+                VALUES ($1, $2, $3, $4)
+            `, [busId, seatNumber, seatType, priceModifier]));
         }
 
-        Promise.all(seatPromises).then(() => {
-            res.json({
-                id: busId,
-                message: 'Bus and seats added successfully'
-            });
-        });
-    });
+        await Promise.all(seatPromises);
+
+        res.json(busResult.rows[0]);
+    } catch (err) {
+        console.error('Error al agregar autobús:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Add new schedule
-router.post('/schedules', checkAdmin, (req, res) => {
+router.post('/schedules', checkAdmin, async (req, res) => {
     const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier } = req.body;
     const db = req.db;
 
@@ -260,35 +211,34 @@ router.post('/schedules', checkAdmin, (req, res) => {
         return res.status(400).json({ error: 'All fields are required' });
     }
 
-    db.run(`
-        INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier || 1.0], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-
-        res.json({
-            id: this.lastID,
-            message: 'Schedule added successfully'
-        });
-    });
+    try {
+        const result = await db.query(`
+            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *
+        `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier || 1.0]);
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al agregar horario:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Get all routes for admin
-router.get('/routes', checkAdmin, (req, res) => {
+router.get('/routes', checkAdmin, async (req, res) => {
     const db = req.db;
 
-    db.all('SELECT * FROM routes ORDER BY origin, destination', (err, routes) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(routes);
-    });
+    try {
+        const result = await db.query('SELECT * FROM routes ORDER BY origin, destination');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener rutas:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Update a route
-router.put('/routes/:id', checkAdmin, (req, res) => {
+router.put('/routes/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
     const { origin, destination, distance_km, base_price } = req.body;
 
@@ -296,55 +246,60 @@ router.put('/routes/:id', checkAdmin, (req, res) => {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
 
-    const db = req.db;
-    db.run(`
-        UPDATE routes
-        SET origin = ?, destination = ?, distance_km = ?, base_price = ?
-        WHERE id = ?
-    `, [origin, destination, distance_km, base_price, id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
+    try {
+        const result = await req.db.query(`
+            UPDATE routes
+            SET origin = $1, destination = $2, distance_km = $3, base_price = $4
+            WHERE id = $5
+            RETURNING *
+        `, [origin, destination, distance_km, base_price, id]);
+
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Ruta no encontrada' });
         }
-        res.json({ message: 'Ruta actualizada exitosamente' });
-    });
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar ruta:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Get all buses for admin
-router.get('/buses', checkAdmin, (req, res) => {
+router.get('/buses', checkAdmin, async (req, res) => {
     const db = req.db;
 
-    db.all('SELECT * FROM buses ORDER BY bus_number', (err, buses) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(buses);
-    });
+    try {
+        const result = await db.query('SELECT * FROM buses ORDER BY bus_number');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener autobuses:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 // Get all schedules for admin
-router.get('/schedules', checkAdmin, (req, res) => {
+router.get('/schedules', checkAdmin, async (req, res) => {
     const db = req.db;
 
-    db.all(`
-        SELECT 
-            s.*,
-            r.origin,
-            r.destination,
-            b.bus_number,
-            b.bus_type
-        FROM schedules s
-        JOIN routes r ON s.route_id = r.id
-        JOIN buses b ON s.bus_id = b.id
-        ORDER BY r.origin, s.departure_time
-    `, (err, schedules) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(schedules);
-    });
+    try {
+        const result = await db.query(`
+            SELECT 
+                s.*,
+                r.origin,
+                r.destination,
+                b.bus_number,
+                b.bus_type
+            FROM schedules s
+            JOIN routes r ON s.route_id = r.id
+            JOIN buses b ON s.bus_id = b.id
+            ORDER BY r.origin, s.departure_time
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener horarios:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
 });
 
 module.exports = router;
