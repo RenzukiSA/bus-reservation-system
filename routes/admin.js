@@ -13,33 +13,23 @@ const checkAdmin = (req, res, next) => {
 
 // Admin login
 router.post('/login', async (req, res) => {
-    console.log('--- [DEBUG] Iniciando /api/admin/login ---');
     const { password } = req.body;
     const adminPasswordHash = req.adminPasswordHash;
 
-    console.log(`[DEBUG] Contraseña recibida: ${password ? 'Sí' : 'No'}`);
-    console.log(`[DEBUG] Hash de contraseña del servidor disponible: ${adminPasswordHash ? 'Sí' : 'No'}`);
-
     if (!password || !adminPasswordHash) {
-        console.log('[DEBUG] Error: Faltan datos para el login (contraseña o hash).');
         return res.status(400).json({ error: 'La configuración del servidor es incorrecta o falta la contraseña.' });
     }
 
     try {
-        console.log('[DEBUG] Intentando comparar contraseñas con bcrypt...');
         const match = await bcrypt.compare(password, adminPasswordHash);
-        console.log(`[DEBUG] bcrypt.compare completado. Coincidencia: ${match}`);
-
         if (match) {
             req.session.isAdmin = true;
-            console.log('[DEBUG] Login de admin exitoso. Sesión establecida.');
             return res.json({ success: true, message: 'Inicio de sesión exitoso.' });
         } else {
-            console.log('[DEBUG] Contraseña de admin incorrecta.');
             return res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
         }
     } catch (err) {
-        console.error('--- [DEBUG] ¡ERROR CATASTRÓFICO EN LOGIN DE ADMIN! ---', err);
+        console.error('Error durante el inicio de sesión del administrador:', err);
         return res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
@@ -198,3 +188,4 @@ router.get('/schedules', checkAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
