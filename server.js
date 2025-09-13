@@ -7,6 +7,7 @@ require('dotenv').config({
     encoding: 'utf8' 
 });
 
+const { Pool } = require('pg');
 const { initDatabase } = require('./database/init');
 const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
@@ -16,6 +17,18 @@ const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configuración de la base de datos PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// Middleware para pasar la conexión a la DB a las rutas
+app.use((req, res, next) => {
+    req.db = pool;
+    next();
+});
 
 // Middleware
 app.use(cors());
@@ -44,12 +57,8 @@ bcrypt.hash(process.env.ADMIN_PASSWORD, 10).then(hash => {
     console.log('Admin password hashed and ready.');
 }).catch(err => console.error('Error hashing password:', err));
 
-// Initialize database
-const db = initDatabase();
-
 // Make database and password hash available to routes
 app.use((req, res, next) => {
-    req.db = db;
     req.adminPasswordHash = adminPasswordHash;
     next();
 });
@@ -89,21 +98,28 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Serve main page
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// Servir archivos estáticos de la app de React en producción
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, 'client/build')));
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
-});
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+    });
+}
 
-// Start server
-app.listen(PORT, () => {
-    console.log(` Bus Reservation System running on port ${PORT}`);
-    console.log(` Access the app at: http://localhost:${PORT}`);
-});
+// Inicializar la base de datos y arrancar el servidor
+async function startServer() {
+    try {
+        await initDatabase(pool);
+        app.listen(PORT, () => {
+            console.log(`Servidor corriendo en el puerto ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Error al iniciar el servidor:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 module.exports = app;

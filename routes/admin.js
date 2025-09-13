@@ -1,8 +1,101 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcrypt');
+
+// Middleware to check if admin is logged in
+const checkAdmin = (req, res, next) => {
+    if (req.session.isAdmin) {
+        next();
+    } else {
+        res.status(401).json({ error: 'Acceso no autorizado. Debes iniciar sesión como administrador.' });
+    }
+};
+
+// Admin login
+router.post('/login', async (req, res) => {
+    const { password } = req.body;
+    const adminPasswordHash = req.adminPasswordHash;
+
+    if (!password || !adminPasswordHash) {
+        return res.status(400).json({ error: 'La configuración del servidor es incorrecta.' });
+    }
+
+    try {
+        const match = await bcrypt.compare(password, adminPasswordHash);
+        if (match) {
+            req.session.isAdmin = true;
+            res.json({ success: true, message: 'Inicio de sesión exitoso.' });
+        } else {
+            res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
+        }
+    } catch (err) {
+        console.error('Error durante el inicio de sesión del administrador:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Admin logout
+router.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ error: 'No se pudo cerrar la sesión.' });
+        }
+        res.clearCookie('connect.sid'); // El nombre de la cookie puede variar
+        res.json({ success: true, message: 'Sesión cerrada exitosamente.' });
+    });
+});
+
+// Check session status
+router.get('/status', (req, res) => {
+    if (req.session.isAdmin) {
+        res.json({ isAdmin: true });
+    } else {
+        res.json({ isAdmin: false });
+    }
+});
+
+// Get all reservations (protected)
+router.get('/reservations', checkAdmin, async (req, res) => {
+    const { status, date, customer } = req.query;
+    let query = `
+        SELECT res.*, r.origin, r.destination, s.departure_time, b.bus_number
+        FROM reservations res
+        JOIN schedules s ON res.schedule_id = s.id
+        JOIN routes r ON s.route_id = r.id
+        JOIN buses b ON s.bus_id = b.id
+    `;
+    const params = [];
+    const conditions = [];
+
+    if (status) {
+        params.push(status);
+        conditions.push(`res.status = $${params.length}`);
+    }
+    if (date) {
+        params.push(date);
+        conditions.push(`res.reservation_date = $${params.length}`);
+    }
+    if (customer) {
+        params.push(`%${customer}%`);
+        conditions.push(`(res.customer_name ILIKE $${params.length} OR res.customer_phone ILIKE $${params.length})`);
+    }
+
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY res.created_at DESC';
+
+    try {
+        const result = await req.db.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener las reservaciones de admin:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
 
 // Get all reservations with filters
-router.get('/reservations', (req, res) => {
+router.get('/reservations', checkAdmin, (req, res) => {
     const { status, date, route } = req.query;
     const db = req.db;
 
@@ -51,7 +144,7 @@ router.get('/reservations', (req, res) => {
 });
 
 // Get dashboard statistics
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', checkAdmin, (req, res) => {
     const db = req.db;
 
     const stats = {};
@@ -141,7 +234,7 @@ router.get('/dashboard', (req, res) => {
 });
 
 // Add new route
-router.post('/routes', (req, res) => {
+router.post('/routes', checkAdmin, (req, res) => {
     const { origin, destination, distance_km, base_price } = req.body;
     const db = req.db;
 
@@ -165,7 +258,7 @@ router.post('/routes', (req, res) => {
 });
 
 // Add new bus
-router.post('/buses', (req, res) => {
+router.post('/buses', checkAdmin, (req, res) => {
     const { bus_number, capacity, bus_type } = req.body;
     const db = req.db;
 
@@ -208,7 +301,7 @@ router.post('/buses', (req, res) => {
 });
 
 // Add new schedule
-router.post('/schedules', (req, res) => {
+router.post('/schedules', checkAdmin, (req, res) => {
     const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier } = req.body;
     const db = req.db;
 
@@ -232,7 +325,7 @@ router.post('/schedules', (req, res) => {
 });
 
 // Get all routes for admin
-router.get('/routes', (req, res) => {
+router.get('/routes', checkAdmin, (req, res) => {
     const db = req.db;
 
     db.all('SELECT * FROM routes ORDER BY origin, destination', (err, routes) => {
@@ -244,7 +337,7 @@ router.get('/routes', (req, res) => {
 });
 
 // Update a route
-router.put('/routes/:id', (req, res) => {
+router.put('/routes/:id', checkAdmin, (req, res) => {
     const { id } = req.params;
     const { origin, destination, distance_km, base_price } = req.body;
 
@@ -269,7 +362,7 @@ router.put('/routes/:id', (req, res) => {
 });
 
 // Get all buses for admin
-router.get('/buses', (req, res) => {
+router.get('/buses', checkAdmin, (req, res) => {
     const db = req.db;
 
     db.all('SELECT * FROM buses ORDER BY bus_number', (err, buses) => {
@@ -281,7 +374,7 @@ router.get('/buses', (req, res) => {
 });
 
 // Get all schedules for admin
-router.get('/schedules', (req, res) => {
+router.get('/schedules', checkAdmin, (req, res) => {
     const db = req.db;
 
     db.all(`

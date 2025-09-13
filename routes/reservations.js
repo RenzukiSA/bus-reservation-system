@@ -1,203 +1,164 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
 
 // Create a new reservation
-router.post('/', (req, res) => {
-    console.log('--- [RESERVA] Iniciando creación de reserva ---');
-    console.log('[RESERVA] Body recibido:', req.body);
+router.post('/', async (req, res) => {
     const {
         schedule_id,
         reservation_date,
-        reservation_type, // 'seats' or 'full_bus'
-        selected_seats, // array of seat IDs for individual seat reservations
+        reservation_type,
+        selected_seats, // array of seat IDs
         customer_name,
         customer_phone,
         customer_email
     } = req.body;
 
     if (!schedule_id || !reservation_date || !reservation_type || !customer_name || !customer_phone) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return res.status(400).json({ error: 'Faltan campos requeridos' });
     }
 
-    if (reservation_type === 'seats' && (!selected_seats || selected_seats.length === 0)) {
-        return res.status(400).json({ error: 'Selected seats are required for seat reservations' });
-    }
+    const db = req.db; // This is the pg pool
 
-    const db = req.db;
-    const reservationId = uuidv4();
-    const paymentDeadline = new Date(Date.now() + (process.env.RESERVATION_TIMEOUT_MINUTES || 15) * 60 * 1000);
-
-    // First, get schedule and pricing info
-    db.get(`
-        SELECT 
-            s.price_multiplier,
-            r.base_price,
-            b.capacity,
-            b.bus_type
-        FROM schedules s
-        JOIN routes r ON s.route_id = r.id
-        JOIN buses b ON s.bus_id = b.id
-        WHERE s.id = ?
-    `, [schedule_id], (err, scheduleInfo) => {
-        if (err || !scheduleInfo) {
-            return res.status(500).json({ error: 'Schedule not found' });
+    try {
+        // 1. Get schedule info
+        const scheduleQuery = `
+            SELECT s.*, r.base_price, b.capacity 
+            FROM schedules s
+            JOIN routes r ON s.route_id = r.id
+            JOIN buses b ON s.bus_id = b.id
+            WHERE s.id = $1
+        `;
+        const scheduleResult = await db.query(scheduleQuery, [schedule_id]);
+        if (scheduleResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Horario no encontrado' });
         }
+        const scheduleInfo = scheduleResult.rows[0];
 
-        // Check availability before creating reservation
-        db.all(`
-            SELECT seats_reserved, reservation_type
-            FROM reservations
-            WHERE schedule_id = ? 
-            AND reservation_date = ?
-            AND status IN ('pending', 'confirmed')
-        `, [schedule_id, reservation_date], (err, existingReservations) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
+        // 2. Check for existing reservations for this schedule and date
+        const existingReservationsQuery = `
+            SELECT reservation_type, seats_reserved 
+            FROM reservations 
+            WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')
+        `;
+        const existingReservationsResult = await db.query(existingReservationsQuery, [schedule_id, reservation_date]);
 
-            // Check if there's already a full bus reservation
-            const hasFullBusReservation = existingReservations.some(r => r.reservation_type === 'full_bus');
-            
-            if (hasFullBusReservation) {
-                return res.status(400).json({ error: 'Bus is fully reserved for this date' });
-            }
-
-            // Get currently reserved individual seats
-            let reservedSeatIds = [];
-            existingReservations.forEach(reservation => {
-                if (reservation.seats_reserved) {
-                    try {
-                        const seatIds = JSON.parse(reservation.seats_reserved);
-                        reservedSeatIds = reservedSeatIds.concat(seatIds);
-                    } catch (e) {
-                        console.error('Error parsing seats_reserved:', e);
-                    }
-                }
-            });
-
-            // Validate reservation type specific constraints
-            if (reservation_type === 'full_bus') {
-                if (reservedSeatIds.length > 0) {
-                    return res.status(400).json({ error: 'Cannot reserve full bus - some seats are already reserved' });
-                }
-            } else if (reservation_type === 'seats') {
-                // Check if any selected seats are already reserved
-                const conflictingSeats = selected_seats.filter(seatId => reservedSeatIds.includes(seatId));
-                if (conflictingSeats.length > 0) {
-                    return res.status(400).json({ error: `Seats ${conflictingSeats.join(', ')} are already reserved` });
-                }
-            }
-
-            // Calculate total price and create reservation
-            if (reservation_type === 'full_bus') {
-                // Full bus gets 10% discount
-                const totalPrice = scheduleInfo.base_price * scheduleInfo.price_multiplier * scheduleInfo.capacity * 0.9;
-                createReservation(totalPrice);
+        let reservedSeatIds = [];
+        let isFullBusReserved = false;
+        existingReservationsResult.rows.forEach(r => {
+            if (r.reservation_type === 'full_bus') {
+                isFullBusReserved = true;
             } else {
-                // Get individual seat prices
-                console.log('[RESERVA] Calculando precio para asientos:', selected_seats);
-                const placeholders = selected_seats.map(() => '?').join(',');
-                const query = `SELECT price_modifier FROM seats WHERE id IN (${placeholders})`;
-
-                db.all(query, selected_seats, (err, seatPrices) => {
-                    console.log('[RESERVA] Resultado de la consulta de precios:', { err, seatPrices });
-                    if (err) {
-                        return res.status(500).json({ error: 'Error calculating seat prices' });
-                    }
-
-                    const totalPrice = seatPrices.reduce((sum, seat) => {
-                        return sum + (scheduleInfo.base_price * scheduleInfo.price_multiplier * seat.price_modifier);
-                    }, 0);
-
-                    // Create the reservation with the calculated price
-                    createReservation(totalPrice);
-                });
-            }
-
-            function createReservation(totalPrice) {
-                console.log('[RESERVA] Dentro de createReservation. Precio total:', totalPrice);
-                const seatsReserved = reservation_type === 'seats' ? JSON.stringify(selected_seats) : null;
-                const params = [
-                    reservationId, schedule_id, reservation_date, reservation_type,
-                    seatsReserved, customer_name, customer_phone, customer_email,
-                    totalPrice.toFixed(2), paymentDeadline.toISOString()
-                ];
-
-                console.log('[RESERVA] Parámetros para INSERT:', params);
-
-                db.run(`
-                    INSERT INTO reservations (
-                        id, schedule_id, reservation_date, reservation_type, 
-                        seats_reserved, customer_name, customer_phone, customer_email,
-                        total_price, payment_deadline
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, params, function(err) {
-                    if (err) {
-                        return res.status(500).json({ error: err.message });
-                    }
-
-                    res.json({
-                        reservation_id: reservationId,
-                        total_price: totalPrice.toFixed(2),
-                        payment_deadline: paymentDeadline,
-                        whatsapp_number: process.env.WHATSAPP_BUSINESS_NUMBER,
-                        message: `Reserva creada exitosamente. Tienes ${process.env.RESERVATION_TIMEOUT_MINUTES || 15} minutos para enviar el comprobante de pago por WhatsApp.`
-                    });
-                });
+                const seats = JSON.parse(r.seats_reserved || '[]');
+                reservedSeatIds.push(...seats);
             }
         });
-    });
+
+        if (isFullBusReserved) {
+            return res.status(409).json({ error: 'El autobús completo ya ha sido reservado para esta fecha.' });
+        }
+
+        // 3. Calculate total price and validate seats
+        let totalPrice = 0;
+        if (reservation_type === 'full_bus') {
+            if (reservedSeatIds.length > 0) {
+                return res.status(409).json({ error: 'No se puede reservar el autobús completo, ya hay asientos individuales reservados.' });
+            }
+            totalPrice = scheduleInfo.base_price * scheduleInfo.price_multiplier * scheduleInfo.capacity * 0.90; // 10% discount
+        } else if (reservation_type === 'seats') {
+            if (!selected_seats || selected_seats.length === 0) {
+                return res.status(400).json({ error: 'Debe seleccionar al menos un asiento.' });
+            }
+
+            const alreadyReserved = selected_seats.some(id => reservedSeatIds.includes(id));
+            if (alreadyReserved) {
+                return res.status(409).json({ error: 'Uno o más de los asientos seleccionados ya están ocupados.' });
+            }
+
+            const placeholders = selected_seats.map((_, i) => `$${i + 1}`).join(',');
+            const seatsQuery = `SELECT price_modifier FROM seats WHERE id IN (${placeholders})`;
+            const seatsResult = await db.query(seatsQuery, selected_seats);
+            
+            totalPrice = seatsResult.rows.reduce((sum, seat) => {
+                return sum + (scheduleInfo.base_price * scheduleInfo.price_multiplier * seat.price_modifier);
+            }, 0);
+        } else {
+            return res.status(400).json({ error: 'Tipo de reservación no válido.' });
+        }
+
+        // 4. Create reservation
+        const reservationId = uuidv4();
+        const timeoutMinutes = process.env.RESERVATION_TIMEOUT_MINUTES || 15;
+        const paymentDeadline = new Date(Date.now() + timeoutMinutes * 60000);
+        const seatsReservedJson = reservation_type === 'seats' ? JSON.stringify(selected_seats) : null;
+
+        const insertQuery = `
+            INSERT INTO reservations (
+                id, schedule_id, reservation_date, reservation_type, seats_reserved, 
+                customer_name, customer_phone, customer_email, total_price, payment_deadline, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+        `;
+        const insertParams = [
+            reservationId, schedule_id, reservation_date, reservation_type, seatsReservedJson,
+            customer_name, customer_phone, customer_email, totalPrice.toFixed(2), paymentDeadline.toISOString()
+        ];
+        
+        await db.query(insertQuery, insertParams);
+
+        res.status(201).json({
+            success: true,
+            reservation_id: reservationId,
+            total_price: totalPrice.toFixed(2),
+            payment_deadline: paymentDeadline.toISOString(),
+            whatsapp_number: process.env.WHATSAPP_BUSINESS_NUMBER
+        });
+
+    } catch (err) {
+        console.error('Error al crear la reservación:', err);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    }
 });
 
 // Get reservation details
-router.get('/:reservationId', (req, res) => {
+router.get('/:reservationId', async (req, res) => {
     const { reservationId } = req.params;
     const db = req.db;
 
-    db.get(`
-        SELECT 
-            res.*,
-            s.departure_time,
-            s.arrival_time,
-            r.origin,
-            r.destination,
-            b.bus_number,
-            b.bus_type
-        FROM reservations res
-        JOIN schedules s ON res.schedule_id = s.id
-        JOIN routes r ON s.route_id = r.id
-        JOIN buses b ON s.bus_id = b.id
-        WHERE res.id = ?
-    `, [reservationId], (err, reservation) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+    try {
+        const query = `
+            SELECT 
+                res.*,
+                s.departure_time,
+                s.arrival_time,
+                r.origin,
+                r.destination,
+                b.bus_number,
+                b.bus_type
+            FROM reservations res
+            JOIN schedules s ON res.schedule_id = s.id
+            JOIN routes r ON s.route_id = r.id
+            JOIN buses b ON s.bus_id = b.id
+            WHERE res.id = $1
+        `;
+        const result = await db.query(query, [reservationId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Reservación no encontrada' });
         }
 
-        if (!reservation) {
-            return res.status(404).json({ error: 'Reservation not found' });
-        }
+        const reservation = result.rows[0];
 
         // If it's a seat reservation, get seat details
         if (reservation.reservation_type === 'seats' && reservation.seats_reserved) {
             try {
                 const seatIds = JSON.parse(reservation.seats_reserved);
-                const seatIdsStr = seatIds.join(',');
-                
-                db.all(`
-                    SELECT seat_number, seat_type
-                    FROM seats
-                    WHERE id IN (${seatIdsStr})
-                    ORDER BY CAST(seat_number AS INTEGER)
-                `, (err, seats) => {
-                    if (err) {
-                        return res.status(500).json({ error: err.message });
-                    }
+                const placeholders = seatIds.map((_, i) => `$${i + 1}`).join(',');
+                const seatsQuery = `SELECT seat_number, seat_type FROM seats WHERE id IN (${placeholders})`;
+                const seatsResult = await db.query(seatsQuery, seatIds);
 
-                    res.json({
-                        ...reservation,
-                        seats: seats
-                    });
+                res.json({
+                    ...reservation,
+                    seats: seatsResult.rows
                 });
             } catch (e) {
                 res.json(reservation);
@@ -205,72 +166,81 @@ router.get('/:reservationId', (req, res) => {
         } else {
             res.json(reservation);
         }
-    });
+    } catch (err) {
+        console.error('Error al obtener la reservación:', err);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    }
 });
 
 // Confirm payment (admin endpoint)
-router.put('/:reservationId/confirm', (req, res) => {
+router.put('/:reservationId/confirm', async (req, res) => {
     const { reservationId } = req.params;
     const db = req.db;
 
-    db.run(`
-        UPDATE reservations 
-        SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND status = 'pending'
-    `, [reservationId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+    try {
+        const query = `
+            UPDATE reservations 
+            SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND status = 'pending'
+        `;
+        const result = await db.query(query, [reservationId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Reservación no encontrada o ya procesada' });
         }
 
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Reservation not found or already processed' });
-        }
-
-        res.json({ message: 'Payment confirmed successfully' });
-    });
+        res.json({ message: 'Pago confirmado exitosamente' });
+    } catch (err) {
+        console.error('Error al confirmar el pago:', err);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    }
 });
 
 // Cancel reservation
-router.put('/:reservationId/cancel', (req, res) => {
+router.put('/:reservationId/cancel', async (req, res) => {
     const { reservationId } = req.params;
     const db = req.db;
 
-    db.run(`
-        UPDATE reservations 
-        SET status = 'cancelled'
-        WHERE id = ? AND status IN ('pending', 'confirmed')
-    `, [reservationId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+    try {
+        const query = `
+            UPDATE reservations 
+            SET status = 'cancelled'
+            WHERE id = $1 AND status IN ('pending', 'confirmed')
+        `;
+        const result = await db.query(query, [reservationId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Reservación no encontrada o no puede ser cancelada' });
         }
 
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Reservation not found or cannot be cancelled' });
-        }
-
-        res.json({ message: 'Reservation cancelled successfully' });
-    });
+        res.json({ message: 'Reservación cancelada exitosamente' });
+    } catch (err) {
+        console.error('Error al cancelar la reservación:', err);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    }
 });
 
 // Auto-expire pending reservations (called by cron job)
-router.post('/expire-pending', (req, res) => {
+router.post('/expire-pending', async (req, res) => {
     const db = req.db;
 
-    db.run(`
-        UPDATE reservations 
-        SET status = 'expired'
-        WHERE status = 'pending' 
-        AND payment_deadline < CURRENT_TIMESTAMP
-    `, function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
+    try {
+        const query = `
+            UPDATE reservations 
+            SET status = 'expired'
+            WHERE status = 'pending' 
+            AND payment_deadline < CURRENT_TIMESTAMP
+        `;
+        const result = await db.query(query);
 
         res.json({ 
-            message: `${this.changes} reservations expired`,
-            expired_count: this.changes 
+            message: `${result.rowCount} reservaciones expiradas`,
+            expired_count: result.rowCount 
         });
-    });
+    } catch (err) {
+        console.error('Error al expirar las reservaciones pendientes:', err);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    }
 });
 
 module.exports = router;
