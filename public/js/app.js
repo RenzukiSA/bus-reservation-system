@@ -1182,31 +1182,40 @@ async function checkAuthStatus() {
     }
 }
 
-async function handleAdminLogin(e) {
-    e.preventDefault();
-    const password = document.getElementById('adminPassword').value;
-    const errorEl = document.getElementById('loginError');
-    errorEl.classList.add('hidden');
+// Reemplaza tu función handleAdminLogin existente con esta:
+async function handleAdminLogin(event) {
+    event.preventDefault();
+    const password = document.getElementById('admin-password').value;
+    const errorDiv = document.getElementById('admin-login-error');
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
 
     try {
-        const response = await fetch(`${API_BASE}/login`, {
+        const response = await fetch('/api/admin/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password })
         });
 
-        const result = await response.json();
-
-        if (response.ok) {
-            document.getElementById('adminLoginModal').classList.add('hidden');
-            showSection('admin');
-        } else {
-            errorEl.textContent = result.error || 'Error desconocido';
-            errorEl.classList.remove('hidden');
+        // El servidor respondió, pero quizás con un error (ej: 401 Contraseña incorrecta)
+        if (!response.ok) {
+            const result = await response.json().catch(() => ({ error: `El servidor respondió con un error ${response.status}, pero el cuerpo no es JSON válido.` }));
+            throw new Error(result.error || `Error del servidor: ${response.status}`);
         }
+
+        const result = await response.json();
+        if (result.success) {
+            window.location.href = '/admin.html'; // Redirigir al panel de admin
+        } else {
+            // Esto no debería ocurrir si response.ok es true, pero es una salvaguarda
+            throw new Error(result.error || 'Ocurrió un error desconocido durante el inicio de sesión.');
+        }
+
     } catch (error) {
-        errorEl.textContent = 'Error de conexión con el servidor.';
-        errorEl.classList.remove('hidden');
+        // Hubo un fallo de red, CORS, o el servidor no respondió en absoluto.
+        console.error('FALLO CRÍTICO DE CONEXIÓN:', error);
+        errorDiv.textContent = `Error de conexión. Detalles: ${error.message}. Revisa la consola del navegador (F12) para más información.`;
+        errorDiv.style.display = 'block';
     }
 }
 
