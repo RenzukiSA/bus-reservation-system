@@ -94,55 +94,6 @@ router.get('/reservations', checkAdmin, async (req, res) => {
     }
 });
 
-// Get all reservations with filters
-router.get('/reservations', checkAdmin, (req, res) => {
-    const { status, date, route } = req.query;
-    const db = req.db;
-
-    let query = `
-        SELECT 
-            res.*,
-            s.departure_time,
-            s.arrival_time,
-            r.origin,
-            r.destination,
-            b.bus_number,
-            b.bus_type
-        FROM reservations res
-        JOIN schedules s ON res.schedule_id = s.id
-        JOIN routes r ON s.route_id = r.id
-        JOIN buses b ON s.bus_id = b.id
-        WHERE 1=1
-    `;
-    
-    const params = [];
-
-    if (status) {
-        query += ' AND res.status = ?';
-        params.push(status);
-    }
-
-    if (date) {
-        query += ' AND res.reservation_date = ?';
-        params.push(date);
-    }
-
-    if (route) {
-        query += ' AND (r.origin LIKE ? OR r.destination LIKE ?)';
-        params.push(`%${route}%`, `%${route}%`);
-    }
-
-    query += ' ORDER BY res.created_at DESC';
-
-    db.all(query, params, (err, reservations) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-
-        res.json(reservations);
-    });
-});
-
 // Get dashboard statistics
 router.get('/dashboard', checkAdmin, (req, res) => {
     const db = req.db;
