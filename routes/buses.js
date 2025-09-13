@@ -42,14 +42,14 @@ router.get('/schedules', async (req, res) => {
         // 2. Buscar horarios para la ruta encontrada y el día de la semana
         const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
         const schedulesQuery = `
-            SELECT s.id, s.departure_time, s.arrival_time, b.bus_type, b.capacity, r.base_price * s.price_multiplier as final_price
+            SELECT s.id, s.departure_time, s.arrival_time, b.type as bus_type, b.capacity, r.base_price * s.price_multiplier as final_price
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             JOIN buses b ON s.bus_id = b.id
-            WHERE r.id = $1 AND (s.days_of_week LIKE '%"daily"%' OR s.days_of_week LIKE $2)
+            WHERE r.id = $1 AND (s.days_of_week @> '["daily"]' OR s.days_of_week @> $2::jsonb)
             ORDER BY s.departure_time;
         `;
-        const schedulesResult = await req.db.query(schedulesQuery, [matchedRoute.id, `%"${dayOfWeek}"%`]);
+        const schedulesResult = await req.db.query(schedulesQuery, [matchedRoute.id, `["${dayOfWeek}"]`]);
         const schedules = schedulesResult.rows;
 
         // 3. Para cada horario, calcular la disponibilidad de asientos
