@@ -94,6 +94,34 @@ router.get('/reservations', checkAdmin, async (req, res) => {
     }
 });
 
+// Actualizar el estado de una reservación
+router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['confirmed', 'cancelled'].includes(status)) {
+        return res.status(400).json({ error: 'Estado no válido.' });
+    }
+
+    try {
+        const result = await req.db.query(
+            'UPDATE reservations SET status = $1 WHERE id = $2 RETURNING *',
+            [status, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Reservación no encontrada.' });
+        }
+
+        // TODO: Si se cancela, se deberían liberar los asientos.
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar el estado de la reservación:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 // Get dashboard statistics
 router.get('/dashboard', checkAdmin, async (req, res) => {
     try {
