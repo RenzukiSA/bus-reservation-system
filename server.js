@@ -1,11 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config({ 
-    path: path.resolve(__dirname, '.env'), 
-    override: true, 
-    encoding: 'utf8' 
-});
+// Cargar variables de entorno solo si no estamos en producción
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 const { Pool } = require('pg');
 const { initDatabase } = require('./database/init');
