@@ -69,8 +69,8 @@ function loadSection(sectionId) {
         case 'dashboard': loadDashboard(); break;
         case 'reservations': loadReservations(); break;
         case 'routes': loadRoutesAdmin(); break;
-        case 'buses': renderPlaceholder('Autobuses'); break;
-        case 'schedules': renderPlaceholder('Horarios'); break;
+        case 'buses': loadBuses(); break;
+        case 'schedules': loadSchedules(); break;
     }
 }
 
@@ -274,14 +274,381 @@ async function handleUpdateRoute(id) {
     }
 }
 
+async function loadBuses() {
+    const content = document.getElementById('admin-content');
+    content.innerHTML = '<p>Cargando autobuses...</p>';
+    
+    try {
+        const response = await fetch('/api/buses');
+        if (!response.ok) throw new Error('No se pudieron cargar los autobuses.');
+        const buses = await response.json();
+        
+        let tableHTML = `
+            <div class="section-header">
+                <button class="btn btn-primary" onclick="showAddBusForm()">
+                    <i class="fas fa-plus"></i> Agregar Autobús
+                </button>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Número de Bus</th>
+                        <th>Capacidad</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        buses.forEach(bus => {
+            tableHTML += `
+                <tr>
+                    <td>${bus.id}</td>
+                    <td>${bus.bus_number}</td>
+                    <td>${bus.capacity} asientos</td>
+                    <td><span class="status-badge ${bus.status}">${bus.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="editBus(${bus.id})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteBus(${bus.id})">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </td>
+                </tr>`;
+        });
+        
+        tableHTML += `
+                </tbody>
+            </table>
+            
+            <!-- Modal para agregar/editar autobús -->
+            <div id="busModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="modal-close" onclick="closeBusModal()">&times;</span>
+                    <h3 id="busModalTitle">Agregar Autobús</h3>
+                    <form id="busForm" class="admin-form">
+                        <div class="form-group">
+                            <label for="busNumber">Número de Autobús:</label>
+                            <input type="text" id="busNumber" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="busCapacity">Capacidad:</label>
+                            <input type="number" id="busCapacity" min="1" max="60" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="busStatus">Estado:</label>
+                            <select id="busStatus" required>
+                                <option value="active">Activo</option>
+                                <option value="inactive">Inactivo</option>
+                            </select>
+                        </div>
+                        <button type="submit">Guardar</button>
+                    </form>
+                </div>
+            </div>`;
+        
+        content.innerHTML = tableHTML;
+        setupBusFormHandlers();
+        
+    } catch (error) {
+        content.innerHTML = `<p class="error-message">${error.message}</p>`;
+    }
+}
+
+function showAddBusForm() {
+    document.getElementById('busModalTitle').textContent = 'Agregar Autobús';
+    document.getElementById('busForm').reset();
+    document.getElementById('busForm').removeAttribute('data-bus-id');
+    document.getElementById('busModal').style.display = 'flex';
+}
+
+async function editBus(busId) {
+    try {
+        const response = await fetch(`/api/buses/${busId}`);
+        if (!response.ok) throw new Error('No se pudo cargar el autobús.');
+        const bus = await response.json();
+        
+        document.getElementById('busModalTitle').textContent = 'Editar Autobús';
+        document.getElementById('busNumber').value = bus.bus_number;
+        document.getElementById('busCapacity').value = bus.capacity;
+        document.getElementById('busStatus').value = bus.status;
+        document.getElementById('busForm').setAttribute('data-bus-id', busId);
+        document.getElementById('busModal').style.display = 'flex';
+        
+    } catch (error) {
+        alert('Error al cargar el autobús: ' + error.message);
+    }
+}
+
+async function deleteBus(busId) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este autobús?')) return;
+    
+    try {
+        const response = await fetch(`/api/buses/${busId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('No se pudo eliminar el autobús.');
+        loadBuses(); // Recargar la lista
+        alert('Autobús eliminado exitosamente.');
+    } catch (error) {
+        alert('Error al eliminar el autobús: ' + error.message);
+    }
+}
+
+function closeBusModal() {
+    document.getElementById('busModal').style.display = 'none';
+}
+
+function setupBusFormHandlers() {
+    const form = document.getElementById('busForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const busData = {
+            bus_number: document.getElementById('busNumber').value,
+            capacity: parseInt(document.getElementById('busCapacity').value),
+            status: document.getElementById('busStatus').value
+        };
+        
+        const busId = form.getAttribute('data-bus-id');
+        const isEdit = !!busId;
+        
+        try {
+            const response = await fetch(
+                isEdit ? `/api/buses/${busId}` : '/api/buses',
+                {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(busData)
+                }
+            );
+            
+            if (!response.ok) throw new Error('No se pudo guardar el autobús.');
+            
+            closeBusModal();
+            loadBuses(); // Recargar la lista
+            alert(isEdit ? 'Autobús actualizado exitosamente.' : 'Autobús agregado exitosamente.');
+            
+        } catch (error) {
+            alert('Error al guardar el autobús: ' + error.message);
+        }
+    });
+}
+
+// --- FUNCIONES PARA GESTIÓN DE HORARIOS ---
+
+async function loadSchedules() {
+    const content = document.getElementById('admin-content');
+    content.innerHTML = '<p>Cargando horarios...</p>';
+    
+    try {
+        // Cargar datos necesarios para los formularios
+        const [schedulesRes, routesRes, busesRes] = await Promise.all([
+            fetch('/api/admin/schedules'),
+            fetch('/api/admin/routes'),
+            fetch('/api/buses')
+        ]);
+        
+        if (!schedulesRes.ok || !routesRes.ok || !busesRes.ok) {
+            throw new Error('No se pudieron cargar los datos necesarios.');
+        }
+        
+        const schedules = await schedulesRes.json();
+        const routes = await routesRes.json();
+        const buses = await busesRes.json();
+        
+        let tableHTML = `
+            <div class="section-header">
+                <button class="btn btn-primary" onclick="showAddScheduleForm()">
+                    <i class="fas fa-plus"></i> Agregar Horario
+                </button>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Ruta</th>
+                        <th>Autobús</th>
+                        <th>Hora Salida</th>
+                        <th>Hora Llegada</th>
+                        <th>Precio</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        if (schedules.length === 0) {
+            tableHTML += '<tr><td colspan="8" style="text-align: center;">No hay horarios definidos.</td></tr>';
+        } else {
+            schedules.forEach(schedule => {
+                tableHTML += `
+                    <tr>
+                        <td>${schedule.id}</td>
+                        <td>${schedule.origin} → ${schedule.destination}</td>
+                        <td>Bus ${schedule.bus_number}</td>
+                        <td>${schedule.departure_time}</td>
+                        <td>${schedule.arrival_time}</td>
+                        <td>$${schedule.base_price}</td>
+                        <td><span class="status-badge ${schedule.status}">${schedule.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
+                        <td>
+                            <button class="btn btn-secondary" onclick="editSchedule(${schedule.id})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <button class="btn btn-danger" onclick="deleteSchedule(${schedule.id})">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+        }
+        
+        tableHTML += `
+                </tbody>
+            </table>
+            
+            <!-- Modal para agregar/editar horario -->
+            <div id="scheduleModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="modal-close" onclick="closeScheduleModal()">&times;</span>
+                    <h3 id="scheduleModalTitle">Agregar Horario</h3>
+                    <form id="scheduleForm" class="admin-form">
+                        <div class="form-group">
+                            <label for="scheduleRoute">Ruta:</label>
+                            <select id="scheduleRoute" required>
+                                <option value="">Seleccionar ruta</option>
+                                ${routes.map(route => `<option value="${route.id}">${route.origin} → ${route.destination}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="scheduleBus">Autobús:</label>
+                            <select id="scheduleBus" required>
+                                <option value="">Seleccionar autobús</option>
+                                ${buses.filter(bus => bus.status === 'active').map(bus => `<option value="${bus.id}">Bus ${bus.bus_number} (${bus.capacity} asientos)</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="departureTime">Hora de Salida:</label>
+                            <input type="time" id="departureTime" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="arrivalTime">Hora de Llegada:</label>
+                            <input type="time" id="arrivalTime" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="schedulePrice">Precio Base:</label>
+                            <input type="number" id="schedulePrice" min="0" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="scheduleStatus">Estado:</label>
+                            <select id="scheduleStatus" required>
+                                <option value="active">Activo</option>
+                                <option value="inactive">Inactivo</option>
+                            </select>
+                        </div>
+                        <button type="submit">Guardar</button>
+                    </form>
+                </div>
+            </div>`;
+        
+        content.innerHTML = tableHTML;
+        setupScheduleFormHandlers();
+        
+    } catch (error) {
+        content.innerHTML = `<p class="error-message">${error.message}</p>`;
+    }
+}
+
+function showAddScheduleForm() {
+    document.getElementById('scheduleModalTitle').textContent = 'Agregar Horario';
+    document.getElementById('scheduleForm').reset();
+    document.getElementById('scheduleForm').removeAttribute('data-schedule-id');
+    document.getElementById('scheduleModal').style.display = 'flex';
+}
+
+async function editSchedule(scheduleId) {
+    try {
+        const response = await fetch(`/api/admin/schedules/${scheduleId}`);
+        if (!response.ok) throw new Error('No se pudo cargar el horario.');
+        const schedule = await response.json();
+        
+        document.getElementById('scheduleModalTitle').textContent = 'Editar Horario';
+        document.getElementById('scheduleRoute').value = schedule.route_id;
+        document.getElementById('scheduleBus').value = schedule.bus_id;
+        document.getElementById('departureTime').value = schedule.departure_time;
+        document.getElementById('arrivalTime').value = schedule.arrival_time;
+        document.getElementById('schedulePrice').value = schedule.base_price;
+        document.getElementById('scheduleStatus').value = schedule.status;
+        document.getElementById('scheduleForm').setAttribute('data-schedule-id', scheduleId);
+        document.getElementById('scheduleModal').style.display = 'flex';
+        
+    } catch (error) {
+        alert('Error al cargar el horario: ' + error.message);
+    }
+}
+
+async function deleteSchedule(scheduleId) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este horario?')) return;
+    
+    try {
+        const response = await fetch(`/api/admin/schedules/${scheduleId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('No se pudo eliminar el horario.');
+        loadSchedules(); // Recargar la lista
+        alert('Horario eliminado exitosamente.');
+    } catch (error) {
+        alert('Error al eliminar el horario: ' + error.message);
+    }
+}
+
+function closeScheduleModal() {
+    document.getElementById('scheduleModal').style.display = 'none';
+}
+
+function setupScheduleFormHandlers() {
+    const form = document.getElementById('scheduleForm');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const scheduleData = {
+            route_id: parseInt(document.getElementById('scheduleRoute').value),
+            bus_id: parseInt(document.getElementById('scheduleBus').value),
+            departure_time: document.getElementById('departureTime').value,
+            arrival_time: document.getElementById('arrivalTime').value,
+            base_price: parseFloat(document.getElementById('schedulePrice').value),
+            status: document.getElementById('scheduleStatus').value
+        };
+        
+        const scheduleId = form.getAttribute('data-schedule-id');
+        const isEdit = !!scheduleId;
+        
+        try {
+            const response = await fetch(
+                isEdit ? `/api/admin/schedules/${scheduleId}` : '/api/admin/schedules',
+                {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(scheduleData)
+                }
+            );
+            
+            if (!response.ok) throw new Error('No se pudo guardar el horario.');
+            
+            closeScheduleModal();
+            loadSchedules(); // Recargar la lista
+            alert(isEdit ? 'Horario actualizado exitosamente.' : 'Horario agregado exitosamente.');
+            
+        } catch (error) {
+            alert('Error al guardar el horario: ' + error.message);
+        }
+    });
+}
+
 function renderPlaceholder(sectionName) {
     const content = document.getElementById('admin-content');
     content.innerHTML = `
-        <div class="stat-card" style="text-align: left;">
-            <h3>Sección de ${sectionName}</h3>
-            <p style="font-size: 1rem; font-weight: 400;">
-                Esta sección está lista para ser desarrollada.
-            </p>
-        </div>`;
+        <div class="placeholder-section">
+            <h2>Sección de ${sectionName}</h2>
+            <p>Esta sección está lista para ser desarrollada.</p>
+        </div>
+    `;
 }
-
