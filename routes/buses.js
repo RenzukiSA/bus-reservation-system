@@ -31,10 +31,10 @@ router.get('/:id', async (req, res) => {
 
 // Crear un nuevo autobús
 router.post('/', async (req, res) => {
-    const { bus_number, capacity, status = 'active' } = req.body;
+    const { bus_number, type, capacity, status = 'active' } = req.body;
     
-    if (!bus_number || !capacity) {
-        return res.status(400).json({ error: 'Número de autobús y capacidad son requeridos' });
+    if (!bus_number || !type || !capacity) {
+        return res.status(400).json({ error: 'Número de autobús, tipo y capacidad son requeridos' });
     }
     
     try {
@@ -45,8 +45,8 @@ router.post('/', async (req, res) => {
         }
         
         const result = await req.db.query(
-            'INSERT INTO buses (bus_number, capacity, status) VALUES ($1, $2, $3) RETURNING *',
-            [bus_number, capacity, status]
+            'INSERT INTO buses (bus_number, type, capacity, status) VALUES ($1, $2, $3, $4) RETURNING *',
+            [bus_number, type, capacity, status]
         );
         
         // Crear asientos para el autobús
@@ -63,9 +63,9 @@ router.post('/', async (req, res) => {
 // Actualizar un autobús
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { bus_number, capacity, status } = req.body;
+    const { bus_number, type, capacity, status } = req.body;
     
-    if (!bus_number || !capacity || !status) {
+    if (!bus_number || !type || !capacity || !status) {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
     
@@ -83,8 +83,8 @@ router.put('/:id', async (req, res) => {
         }
         
         const result = await req.db.query(
-            'UPDATE buses SET bus_number = $1, capacity = $2, status = $3 WHERE id = $4 RETURNING *',
-            [bus_number, capacity, status, id]
+            'UPDATE buses SET bus_number = $1, type = $2, capacity = $3, status = $4 WHERE id = $5 RETURNING *',
+            [bus_number, type, capacity, status, id]
         );
         
         // Si cambió la capacidad, actualizar asientos

@@ -300,6 +300,7 @@ async function loadBuses() {
                     <tr>
                         <th>ID</th>
                         <th>Número de Bus</th>
+                        <th>Tipo</th>
                         <th>Capacidad</th>
                         <th>Estado</th>
                         <th>Acciones</th>
@@ -312,6 +313,7 @@ async function loadBuses() {
                 <tr>
                     <td>${bus.id}</td>
                     <td>${bus.bus_number}</td>
+                    <td>${bus.type || 'N/A'}</td>
                     <td>${bus.capacity} asientos</td>
                     <td><span class="status-badge ${bus.status}">${bus.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
                     <td>
@@ -338,6 +340,16 @@ async function loadBuses() {
                         <div class="form-group">
                             <label for="busNumber">Número de Autobús:</label>
                             <input type="text" id="busNumber" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="busType">Tipo de Autobús:</label>
+                            <select id="busType" required>
+                                <option value="">Seleccionar tipo</option>
+                                <option value="economico">Económico</option>
+                                <option value="primera_clase">Primera Clase</option>
+                                <option value="ejecutivo">Ejecutivo</option>
+                                <option value="lujo">Lujo</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label for="busCapacity">Capacidad:</label>
@@ -378,6 +390,7 @@ async function editBus(busId) {
         
         document.getElementById('busModalTitle').textContent = 'Editar Autobús';
         document.getElementById('busNumber').value = bus.bus_number;
+        document.getElementById('busType').value = bus.type || '';
         document.getElementById('busCapacity').value = bus.capacity;
         document.getElementById('busStatus').value = bus.status;
         document.getElementById('busForm').setAttribute('data-bus-id', busId);
@@ -412,6 +425,7 @@ function setupBusFormHandlers() {
         
         const busData = {
             bus_number: document.getElementById('busNumber').value,
+            type: document.getElementById('busType').value,
             capacity: parseInt(document.getElementById('busCapacity').value),
             status: document.getElementById('busStatus').value
         };
@@ -542,8 +556,22 @@ async function loadSchedules() {
                             <input type="time" id="arrivalTime" required>
                         </div>
                         <div class="form-group">
-                            <label for="schedulePrice">Precio Base:</label>
-                            <input type="number" id="schedulePrice" min="0" step="0.01" required>
+                            <label for="scheduleDays">Días de la Semana:</label>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" value="monday"> Lunes</label>
+                                <label><input type="checkbox" value="tuesday"> Martes</label>
+                                <label><input type="checkbox" value="wednesday"> Miércoles</label>
+                                <label><input type="checkbox" value="thursday"> Jueves</label>
+                                <label><input type="checkbox" value="friday"> Viernes</label>
+                                <label><input type="checkbox" value="saturday"> Sábado</label>
+                                <label><input type="checkbox" value="sunday"> Domingo</label>
+                                <label><input type="checkbox" value="daily"> Diario</label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="priceMultiplier">Multiplicador de Precio:</label>
+                            <input type="number" id="priceMultiplier" min="0.1" max="3.0" step="0.1" value="1.0" required>
+                            <small>1.0 = precio normal, 1.5 = 50% más caro</small>
                         </div>
                         <div class="form-group">
                             <label for="scheduleStatus">Estado:</label>
@@ -615,12 +643,16 @@ function setupScheduleFormHandlers() {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        const daysOfWeekCheckboxes = document.querySelectorAll('#scheduleForm .checkbox-group input:checked');
+        const days_of_week = Array.from(daysOfWeekCheckboxes).map(cb => cb.value);
+
         const scheduleData = {
             route_id: parseInt(document.getElementById('scheduleRoute').value),
             bus_id: parseInt(document.getElementById('scheduleBus').value),
             departure_time: document.getElementById('departureTime').value,
             arrival_time: document.getElementById('arrivalTime').value,
-            base_price: parseFloat(document.getElementById('schedulePrice').value),
+            days_of_week: days_of_week,
+            price_multiplier: parseFloat(document.getElementById('priceMultiplier').value),
             status: document.getElementById('scheduleStatus').value
         };
         

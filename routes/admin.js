@@ -215,9 +215,9 @@ router.get('/schedules/:id', checkAdmin, async (req, res) => {
 
 // Create new schedule
 router.post('/schedules', checkAdmin, async (req, res) => {
-    const { route_id, bus_id, departure_time, arrival_time, base_price, status = 'active' } = req.body;
+    const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier = 1.0, status = 'active' } = req.body;
     
-    if (!route_id || !bus_id || !departure_time || !arrival_time || !base_price) {
+    if (!route_id || !bus_id || !departure_time || !arrival_time || !days_of_week) {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
     
@@ -235,15 +235,12 @@ router.post('/schedules', checkAdmin, async (req, res) => {
             return res.status(400).json({ error: 'El autobús especificado no existe o no está activo' });
         }
         
-        // Actualizar el precio base en la tabla routes
-        await db.query('UPDATE routes SET base_price = $1 WHERE id = $2', [base_price, route_id]);
-        
         // Crear el horario
         const result = await db.query(`
-            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, status) 
-            VALUES ($1, $2, $3, $4, $5) 
+            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier, status) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) 
             RETURNING *
-        `, [route_id, bus_id, departure_time, arrival_time, status]);
+        `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier, status]);
         
         res.status(201).json(result.rows[0]);
     } catch (err) {
