@@ -46,26 +46,37 @@ router.post('/', checkAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Número de autobús, tipo y capacidad son requeridos' });
     }
     
+    const client = await req.db.connect();
     try {
+        await client.query('BEGIN');
+
         // Verificar que el número de autobús no exista
-        const existingBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1', [bus_number]);
+        const existingBus = await client.query('SELECT id FROM buses WHERE bus_number = $1', [bus_number]);
         if (existingBus.rows.length > 0) {
-            return res.status(400).json({ error: 'Ya existe un autobús con ese número' });
+            throw new Error('Ya existe un autobús con ese número');
         }
-        
-        const result = await req.db.query(
+
+        const result = await client.query(
             'INSERT INTO buses (bus_number, type, capacity, status) VALUES ($1, $2, $3, $4) RETURNING *',
             [bus_number, type, capacity, status]
         );
-        
-        // Crear asientos para el autobús
-        const busId = result.rows[0].id;
-        await createSeatsForBus(req.db, busId, capacity);
-        
-        res.status(201).json(result.rows[0]);
+
+        const bus = result.rows[0];
+        await createSeatsForBus(client, bus.id, bus.capacity);
+
+        await client.query('COMMIT');
+        res.status(201).json(bus);
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error al crear autobús:', err.message);
-        res.status(500).json({ error: 'Error al crear autobús' });
+        // Enviar el mensaje de error específico al cliente
+        const errorMessage = err.message.includes('Ya existe un autobús') 
+            ? err.message 
+            : 'Error al crear el autobús en la base de datos.';
+        res.status(500).json({ error: errorMessage });
+    } finally {
+        client.release();
     }
 });
 
