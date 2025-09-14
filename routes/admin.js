@@ -169,7 +169,7 @@ router.get('/schedules', checkAdmin, async (req, res) => {
                 s.status,
                 r.origin,
                 r.destination,
-                r.base_price,
+                s.price_multiplier,
                 b.bus_number
             FROM schedules s
             JOIN routes r ON s.route_id = r.id

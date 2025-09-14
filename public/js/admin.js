@@ -491,7 +491,7 @@ async function loadSchedules() {
                         <th>Autobús</th>
                         <th>Hora Salida</th>
                         <th>Hora Llegada</th>
-                        <th>Precio</th>
+                        <th>Multiplicador</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
@@ -509,7 +509,7 @@ async function loadSchedules() {
                         <td>Bus ${schedule.bus_number}</td>
                         <td>${schedule.departure_time}</td>
                         <td>${schedule.arrival_time}</td>
-                        <td>$${schedule.base_price}</td>
+                        <td>x${schedule.price_multiplier}</td>
                         <td><span class="status-badge ${schedule.status}">${schedule.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
                         <td>
                             <button class="btn btn-secondary" onclick="editSchedule(${schedule.id})">
