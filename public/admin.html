@@ -3,33 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administrador - Transportes Express</title>
-    <link rel="stylesheet" href="/css/styles.css">
-    <link rel="stylesheet" href="/css/admin.css">
+    <title>Panel de Administrador</title>
+    <link rel="stylesheet" href="/css/admin.css?v=1.1">
 </head>
 <body>
-    <header>
-        <nav class="navbar">
-            <a href="/" class="navbar-brand">Transportes Express</a>
-            <ul class="navbar-nav">
-                <li><a href="#dashboard">Dashboard</a></li>
-                <li><a href="#reservations">Reservaciones</a></li>
-                <li><a href="#routes">Rutas</a></li>
-                <li><a href="#buses">Autobuses</a></li>
-                <li><a href="#schedules">Horarios</a></li>
-                <li><a href="#" id="logout-btn">Cerrar Sesión</a></li>
+    <div class="sidebar">
+        <h2>Transportes Express</h2>
+        <nav>
+            <ul>
+                <li><a href="#dashboard" class="nav-link active">📊 Dashboard</a></li>
+                <li><a href="#reservations" class="nav-link">🎫 Reservaciones</a></li>
+                <li><a href="#routes" class="nav-link">↔️ Rutas</a></li>
+                <li><a href="#buses" class="nav-link">🚌 Autobuses</a></li>
+                <li><a href="#schedules" class="nav-link">🗓️ Horarios</a></li>
             </ul>
         </nav>
-    </header>
-
-    <main id="admin-content" class="container">
-        <!-- El contenido se cargará aquí dinámicamente -->
-        <section id="dashboard">
-            <h2>Dashboard</h2>
-            <p>Cargando estadísticas...</p>
-        </section>
+        <div class="logout-section">
+             <a href="#" id="logout-btn">🚪 Cerrar Sesión</a>
+        </div>
+    </div>
+    <main id="main-content">
+        <header class="main-header">
+            <h1 id="content-title">Dashboard</h1>
+        </header>
+        <div id="admin-content" class="content-area">
+            <!-- El contenido dinámico se cargará aquí -->
+        </div>
     </main>
-
     <script src="/js/admin.js"></script>
 </body>
 </html>
