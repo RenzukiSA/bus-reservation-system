@@ -1,6 +1,154 @@
 const express = require('express');
 const router = express.Router();
 
+// --- ENDPOINTS PARA GESTIÓN DE AUTOBUSES ---
+
+// Obtener todos los autobuses
+router.get('/', async (req, res) => {
+    try {
+        const result = await req.db.query('SELECT * FROM buses ORDER BY id');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener autobuses:', err.message);
+        res.status(500).json({ error: 'Error al obtener autobuses' });
+    }
+});
+
+// Obtener un autobús específico
+router.get('/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Autobús no encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al obtener autobús:', err.message);
+        res.status(500).json({ error: 'Error al obtener autobús' });
+    }
+});
+
+// Crear un nuevo autobús
+router.post('/', async (req, res) => {
+    const { bus_number, capacity, status = 'active' } = req.body;
+    
+    if (!bus_number || !capacity) {
+        return res.status(400).json({ error: 'Número de autobús y capacidad son requeridos' });
+    }
+    
+    try {
+        // Verificar que el número de autobús no exista
+        const existingBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1', [bus_number]);
+        if (existingBus.rows.length > 0) {
+            return res.status(400).json({ error: 'Ya existe un autobús con ese número' });
+        }
+        
+        const result = await req.db.query(
+            'INSERT INTO buses (bus_number, capacity, status) VALUES ($1, $2, $3) RETURNING *',
+            [bus_number, capacity, status]
+        );
+        
+        // Crear asientos para el autobús
+        const busId = result.rows[0].id;
+        await createSeatsForBus(req.db, busId, capacity);
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al crear autobús:', err.message);
+        res.status(500).json({ error: 'Error al crear autobús' });
+    }
+});
+
+// Actualizar un autobús
+router.put('/:id', async (req, res) => {
+    const { id } = req.params;
+    const { bus_number, capacity, status } = req.body;
+    
+    if (!bus_number || !capacity || !status) {
+        return res.status(400).json({ error: 'Todos los campos son requeridos' });
+    }
+    
+    try {
+        // Verificar que el autobús existe
+        const existingBus = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
+        if (existingBus.rows.length === 0) {
+            return res.status(404).json({ error: 'Autobús no encontrado' });
+        }
+        
+        // Verificar que el número de autobús no esté en uso por otro autobús
+        const duplicateBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1 AND id != $2', [bus_number, id]);
+        if (duplicateBus.rows.length > 0) {
+            return res.status(400).json({ error: 'Ya existe otro autobús con ese número' });
+        }
+        
+        const result = await req.db.query(
+            'UPDATE buses SET bus_number = $1, capacity = $2, status = $3 WHERE id = $4 RETURNING *',
+            [bus_number, capacity, status, id]
+        );
+        
+        // Si cambió la capacidad, actualizar asientos
+        const oldCapacity = existingBus.rows[0].capacity;
+        if (oldCapacity !== capacity) {
+            await updateSeatsForBus(req.db, id, capacity);
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar autobús:', err.message);
+        res.status(500).json({ error: 'Error al actualizar autobús' });
+    }
+});
+
+// Eliminar un autobús
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        // Verificar que no hay horarios activos usando este autobús
+        const activeSchedules = await req.db.query('SELECT id FROM schedules WHERE bus_id = $1 AND status = $2', [id, 'active']);
+        if (activeSchedules.rows.length > 0) {
+            return res.status(400).json({ error: 'No se puede eliminar el autobús porque tiene horarios activos' });
+        }
+        
+        // Eliminar asientos del autobús
+        await req.db.query('DELETE FROM seats WHERE bus_id = $1', [id]);
+        
+        // Eliminar el autobús
+        const result = await req.db.query('DELETE FROM buses WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Autobús no encontrado' });
+        }
+        
+        res.json({ message: 'Autobús eliminado exitosamente' });
+    } catch (err) {
+        console.error('Error al eliminar autobús:', err.message);
+        res.status(500).json({ error: 'Error al eliminar autobús' });
+    }
+});
+
+// Función auxiliar para crear asientos
+async function createSeatsForBus(db, busId, capacity) {
+    const seatInserts = [];
+    for (let i = 1; i <= capacity; i++) {
+        const seatType = i <= 4 ? 'premium' : 'standard'; // Primeros 4 asientos son premium
+        const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
+        seatInserts.push(`(${busId}, '${i}', '${seatType}', ${priceModifier})`);
+    }
+    
+    if (seatInserts.length > 0) {
+        await db.query(`INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${seatInserts.join(', ')}`);
+    }
+}
+
+// Función auxiliar para actualizar asientos cuando cambia la capacidad
+async function updateSeatsForBus(db, busId, newCapacity) {
+    // Eliminar todos los asientos existentes
+    await db.query('DELETE FROM seats WHERE bus_id = $1', [busId]);
+    // Crear nuevos asientos
+    await createSeatsForBus(db, busId, newCapacity);
+}
+
 // Función para normalizar strings (quitar acentos y a minúsculas)
 const normalizeString = (str) => {
     if (!str) return '';

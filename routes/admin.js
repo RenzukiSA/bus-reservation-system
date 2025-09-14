@@ -161,11 +161,16 @@ router.get('/schedules', checkAdmin, async (req, res) => {
     try {
         const result = await db.query(`
             SELECT 
-                s.*,
+                s.id,
+                s.route_id,
+                s.bus_id,
+                s.departure_time,
+                s.arrival_time,
+                s.status,
                 r.origin,
                 r.destination,
-                b.bus_number,
-                b.bus_type
+                r.base_price,
+                b.bus_number
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             JOIN buses b ON s.bus_id = b.id
@@ -175,6 +180,279 @@ router.get('/schedules', checkAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error al obtener horarios:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Get specific schedule for admin
+router.get('/schedules/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const db = req.db;
+    try {
+        const result = await db.query(`
+            SELECT 
+                s.id,
+                s.route_id,
+                s.bus_id,
+                s.departure_time,
+                s.arrival_time,
+                s.status,
+                r.base_price
+            FROM schedules s
+            JOIN routes r ON s.route_id = r.id
+            WHERE s.id = $1
+        `, [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Horario no encontrado' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al obtener horario:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Create new schedule
+router.post('/schedules', checkAdmin, async (req, res) => {
+    const { route_id, bus_id, departure_time, arrival_time, base_price, status = 'active' } = req.body;
+    
+    if (!route_id || !bus_id || !departure_time || !arrival_time || !base_price) {
+        return res.status(400).json({ error: 'Todos los campos son requeridos' });
+    }
+    
+    const db = req.db;
+    try {
+        // Verificar que la ruta existe
+        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [route_id]);
+        if (routeCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'La ruta especificada no existe' });
+        }
+        
+        // Verificar que el autobús existe y está activo
+        const busCheck = await db.query('SELECT id FROM buses WHERE id = $1 AND status = $2', [bus_id, 'active']);
+        if (busCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'El autobús especificado no existe o no está activo' });
+        }
+        
+        // Actualizar el precio base en la tabla routes
+        await db.query('UPDATE routes SET base_price = $1 WHERE id = $2', [base_price, route_id]);
+        
+        // Crear el horario
+        const result = await db.query(`
+            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, status) 
+            VALUES ($1, $2, $3, $4, $5) 
+            RETURNING *
+        `, [route_id, bus_id, departure_time, arrival_time, status]);
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al crear horario:', err);
+        res.status(500).json({ error: 'Error al crear horario' });
+    }
+});
+
+// Update schedule
+router.put('/schedules/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { route_id, bus_id, departure_time, arrival_time, base_price, status } = req.body;
+    
+    if (!route_id || !bus_id || !departure_time || !arrival_time || !base_price || !status) {
+        return res.status(400).json({ error: 'Todos los campos son requeridos' });
+    }
+    
+    const db = req.db;
+    try {
+        // Verificar que el horario existe
+        const scheduleCheck = await db.query('SELECT id FROM schedules WHERE id = $1', [id]);
+        if (scheduleCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Horario no encontrado' });
+        }
+        
+        // Verificar que la ruta existe
+        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [route_id]);
+        if (routeCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'La ruta especificada no existe' });
+        }
+        
+        // Verificar que el autobús existe
+        const busCheck = await db.query('SELECT id FROM buses WHERE id = $1', [bus_id]);
+        if (busCheck.rows.length === 0) {
+            return res.status(400).json({ error: 'El autobús especificado no existe' });
+        }
+        
+        // Actualizar el precio base en la tabla routes
+        await db.query('UPDATE routes SET base_price = $1 WHERE id = $2', [base_price, route_id]);
+        
+        // Actualizar el horario
+        const result = await db.query(`
+            UPDATE schedules 
+            SET route_id = $1, bus_id = $2, departure_time = $3, arrival_time = $4, status = $5
+            WHERE id = $6 
+            RETURNING *
+        `, [route_id, bus_id, departure_time, arrival_time, status, id]);
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar horario:', err);
+        res.status(500).json({ error: 'Error al actualizar horario' });
+    }
+});
+
+// Delete schedule
+router.delete('/schedules/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const db = req.db;
+    
+    try {
+        // Verificar que no hay reservas activas para este horario
+        const reservationsCheck = await db.query(
+            'SELECT id FROM reservations WHERE schedule_id = $1 AND status IN ($2, $3)', 
+            [id, 'pending', 'confirmed']
+        );
+        
+        if (reservationsCheck.rows.length > 0) {
+            return res.status(400).json({ 
+                error: 'No se puede eliminar el horario porque tiene reservas activas' 
+            });
+        }
+        
+        // Eliminar el horario
+        const result = await db.query('DELETE FROM schedules WHERE id = $1 RETURNING *', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Horario no encontrado' });
+        }
+        
+        res.json({ message: 'Horario eliminado exitosamente' });
+    } catch (err) {
+        console.error('Error al eliminar horario:', err);
+        res.status(500).json({ error: 'Error al eliminar horario' });
+    }
+});
+
+// Update reservation status
+router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!['pending', 'confirmed', 'cancelled'].includes(status)) {
+        return res.status(400).json({ error: 'Estado inválido' });
+    }
+    
+    const db = req.db;
+    try {
+        const result = await db.query(
+            'UPDATE reservations SET status = $1 WHERE id = $2 RETURNING *',
+            [status, id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Reservación no encontrada' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar estado de reservación:', err);
+        res.status(500).json({ error: 'Error al actualizar reservación' });
+    }
+});
+
+// Create route
+router.post('/routes', checkAdmin, async (req, res) => {
+    const { origin, destination } = req.body;
+    
+    if (!origin || !destination) {
+        return res.status(400).json({ error: 'Origen y destino son requeridos' });
+    }
+    
+    const db = req.db;
+    try {
+        // Verificar que no existe la misma ruta
+        const existingRoute = await db.query(
+            'SELECT id FROM routes WHERE LOWER(origin) = LOWER($1) AND LOWER(destination) = LOWER($2)',
+            [origin, destination]
+        );
+        
+        if (existingRoute.rows.length > 0) {
+            return res.status(400).json({ error: 'Ya existe una ruta con el mismo origen y destino' });
+        }
+        
+        const result = await db.query(
+            'INSERT INTO routes (origin, destination, base_price) VALUES ($1, $2, $3) RETURNING *',
+            [origin, destination, 50.00] // Precio base por defecto
+        );
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al crear ruta:', err);
+        res.status(500).json({ error: 'Error al crear ruta' });
+    }
+});
+
+// Update route
+router.put('/routes/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { origin, destination } = req.body;
+    
+    if (!origin || !destination) {
+        return res.status(400).json({ error: 'Origen y destino son requeridos' });
+    }
+    
+    const db = req.db;
+    try {
+        // Verificar que la ruta existe
+        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [id]);
+        if (routeCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Ruta no encontrada' });
+        }
+        
+        // Verificar que no existe otra ruta con el mismo origen y destino
+        const duplicateRoute = await db.query(
+            'SELECT id FROM routes WHERE LOWER(origin) = LOWER($1) AND LOWER(destination) = LOWER($2) AND id != $3',
+            [origin, destination, id]
+        );
+        
+        if (duplicateRoute.rows.length > 0) {
+            return res.status(400).json({ error: 'Ya existe otra ruta con el mismo origen y destino' });
+        }
+        
+        const result = await db.query(
+            'UPDATE routes SET origin = $1, destination = $2 WHERE id = $3 RETURNING *',
+            [origin, destination, id]
+        );
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar ruta:', err);
+        res.status(500).json({ error: 'Error al actualizar ruta' });
+    }
+});
+
+// Delete route
+router.delete('/routes/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const db = req.db;
+    
+    try {
+        // Verificar que no hay horarios usando esta ruta
+        const schedulesCheck = await db.query('SELECT id FROM schedules WHERE route_id = $1', [id]);
+        if (schedulesCheck.rows.length > 0) {
+            return res.status(400).json({ 
+                error: 'No se puede eliminar la ruta porque tiene horarios asociados' 
+            });
+        }
+        
+        const result = await db.query('DELETE FROM routes WHERE id = $1 RETURNING *', [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Ruta no encontrada' });
+        }
+        
+        res.json({ message: 'Ruta eliminada exitosamente' });
+    } catch (err) {
+        console.error('Error al eliminar ruta:', err);
+        res.status(500).json({ error: 'Error al eliminar ruta' });
     }
 });
 
