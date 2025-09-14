@@ -140,7 +140,9 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
     }
 });
 
-// Get all routes for admin
+// --- Rutas CRUD ---
+
+// Obtener todas las rutas
 router.get('/routes', checkAdmin, async (req, res) => {
     const db = req.db;
     try {
@@ -148,6 +150,65 @@ router.get('/routes', checkAdmin, async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener rutas:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Crear una nueva ruta
+router.post('/routes', checkAdmin, async (req, res) => {
+    const { origin, destination } = req.body;
+    if (!origin || !destination) {
+        return res.status(400).json({ error: 'Origen y destino son requeridos.' });
+    }
+    try {
+        const result = await req.db.query(
+            'INSERT INTO routes (origin, destination) VALUES ($1, $2) RETURNING *',
+            [origin, destination]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al crear la ruta:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Actualizar una ruta
+router.put('/routes/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { origin, destination } = req.body;
+    if (!origin || !destination) {
+        return res.status(400).json({ error: 'Origen y destino son requeridos.' });
+    }
+    try {
+        const result = await req.db.query(
+            'UPDATE routes SET origin = $1, destination = $2 WHERE id = $3 RETURNING *',
+            [origin, destination, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Ruta no encontrada.' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al actualizar la ruta:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Eliminar una ruta
+router.delete('/routes/:id', checkAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await req.db.query('DELETE FROM routes WHERE id = $1 RETURNING *', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Ruta no encontrada.' });
+        }
+        res.status(204).send(); // No content
+    } catch (err) {
+        console.error('Error al eliminar la ruta:', err);
+        // Manejar error de llave foránea (si una ruta está en uso)
+        if (err.code === '23503') {
+            return res.status(400).json({ error: 'No se puede eliminar la ruta porque está siendo utilizada en uno o más horarios.' });
+        }
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
