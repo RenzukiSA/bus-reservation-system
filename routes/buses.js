@@ -159,25 +159,7 @@ const normalizeString = (str) => {
 router.get('/routes', async (req, res) => {
     try {
         const result = await req.db.query('SELECT DISTINCT origin, destination FROM routes ORDER BY origin, destination');
-        
-        // Si no hay rutas, crear algunas por defecto
-        if (result.rows.length === 0) {
-            console.log('No hay rutas en la base de datos, insertando rutas por defecto...');
-            await req.db.query(`
-                INSERT INTO routes (origin, destination, distance_km, base_price) VALUES
-                ('Morelia', 'Querétaro', 150, 280.00),
-                ('Querétaro', 'Morelia', 150, 280.00),
-                ('Zitácuaro', 'Morelia', 100, 180.00),
-                ('Morelia', 'Zitácuaro', 100, 180.00)
-                ON CONFLICT DO NOTHING
-            `);
-            
-            // Volver a consultar las rutas
-            const newResult = await req.db.query('SELECT DISTINCT origin, destination FROM routes ORDER BY origin, destination');
-            res.json(newResult.rows);
-        } else {
-            res.json(result.rows);
-        }
+        res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener las rutas:', err.message);
         res.status(500).json({ error: 'Error al obtener las rutas' });
