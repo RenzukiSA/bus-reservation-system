@@ -445,7 +445,10 @@ function setupBusFormHandlers() {
                 }
             );
             
-            if (!response.ok) throw new Error('No se pudo guardar el autobús.');
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'No se pudo guardar el autobús.');
+            }
             
             closeBusModal();
             loadBuses(); // Recargar la lista
