@@ -252,42 +252,32 @@ router.post('/schedules', checkAdmin, async (req, res) => {
 // Update schedule
 router.put('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const { route_id, bus_id, departure_time, arrival_time, base_price, status } = req.body;
-    
-    if (!route_id || !bus_id || !departure_time || !arrival_time || !base_price || !status) {
+    const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier, status } = req.body;
+
+    if (!route_id || !bus_id || !departure_time || !arrival_time || !days_of_week || !price_multiplier || !status) {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
-    
+
     const db = req.db;
     try {
-        // Verificar que el horario existe
-        const scheduleCheck = await db.query('SELECT id FROM schedules WHERE id = $1', [id]);
-        if (scheduleCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Horario no encontrado' });
+        // Verificar que el horario, la ruta y el autobús existen
+        const checks = await Promise.all([
+            db.query('SELECT id FROM schedules WHERE id = $1', [id]),
+            db.query('SELECT id FROM routes WHERE id = $1', [route_id]),
+            db.query('SELECT id FROM buses WHERE id = $1', [bus_id])
+        ]);
+
+        if (checks.some(check => check.rows.length === 0)) {
+            return res.status(404).json({ error: 'El horario, la ruta o el autobús no fueron encontrados.' });
         }
-        
-        // Verificar que la ruta existe
-        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [route_id]);
-        if (routeCheck.rows.length === 0) {
-            return res.status(400).json({ error: 'La ruta especificada no existe' });
-        }
-        
-        // Verificar que el autobús existe
-        const busCheck = await db.query('SELECT id FROM buses WHERE id = $1', [bus_id]);
-        if (busCheck.rows.length === 0) {
-            return res.status(400).json({ error: 'El autobús especificado no existe' });
-        }
-        
-        // Actualizar el precio base en la tabla routes
-        await db.query('UPDATE routes SET base_price = $1 WHERE id = $2', [base_price, route_id]);
-        
+
         // Actualizar el horario
         const result = await db.query(`
             UPDATE schedules 
-            SET route_id = $1, bus_id = $2, departure_time = $3, arrival_time = $4, status = $5
-            WHERE id = $6 
+            SET route_id = $1, bus_id = $2, departure_time = $3, arrival_time = $4, days_of_week = $5, price_multiplier = $6, status = $7
+            WHERE id = $8
             RETURNING *
-        `, [route_id, bus_id, departure_time, arrival_time, status, id]);
+        `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier, status, id]);
         
         res.json(result.rows[0]);
     } catch (err) {
