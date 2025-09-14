@@ -143,15 +143,21 @@ router.delete('/:id', checkAdmin, async (req, res) => {
 
 // Función auxiliar para crear asientos
 async function createSeatsForBus(db, busId, capacity) {
-    const seatInserts = [];
+    const values = [];
+    const placeholders = [];
+    let paramIndex = 1;
+
     for (let i = 1; i <= capacity; i++) {
         const seatType = i <= 4 ? 'premium' : 'standard'; // Primeros 4 asientos son premium
         const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
-        seatInserts.push(`(${parseInt(busId)}, '${i}', '${seatType}', ${parseFloat(priceModifier)})`);
+        
+        placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
+        values.push(busId, i.toString(), seatType, priceModifier);
     }
     
-    if (seatInserts.length > 0) {
-        return db.query(`INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${seatInserts.join(', ')}`);
+    if (values.length > 0) {
+        const query = `INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${placeholders.join(', ')}`;
+        return db.query(query, values);
     }
 }
 
