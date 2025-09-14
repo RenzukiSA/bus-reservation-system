@@ -146,7 +146,7 @@ async function createSeatsForBus(db, busId, capacity) {
     }
     
     if (seatInserts.length > 0) {
-        await db.query(`INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${seatInserts.join(', ')}`);
+        return db.query(`INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${seatInserts.join(', ')}`);
     }
 }
 
