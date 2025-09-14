@@ -132,17 +132,6 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
 });
 
 
-// Get all buses for admin
-router.get('/buses', checkAdmin, async (req, res) => {
-    const db = req.db;
-    try {
-        const result = await db.query('SELECT * FROM buses ORDER BY bus_number');
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error al obtener autobuses:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
 
 // Get all schedules for admin
 router.get('/schedules', checkAdmin, async (req, res) => {
@@ -241,69 +230,76 @@ router.post('/schedules', checkAdmin, async (req, res) => {
 // Update schedule
 router.put('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier, status } = req.body;
+    const client = await req.db.connect();
 
-    if (!route_id || !bus_id || !departure_time || !arrival_time || !days_of_week || !price_multiplier || !status) {
-        return res.status(400).json({ error: 'Todos los campos son requeridos' });
-    }
-
-    const db = req.db;
     try {
-        // Verificar que el horario, la ruta y el autobús existen
-        const checks = await Promise.all([
-            db.query('SELECT id FROM schedules WHERE id = $1', [id]),
-            db.query('SELECT id FROM routes WHERE id = $1', [route_id]),
-            db.query('SELECT id FROM buses WHERE id = $1', [bus_id])
-        ]);
+        await client.query('BEGIN');
 
-        if (checks.some(check => check.rows.length === 0)) {
-            return res.status(404).json({ error: 'El horario, la ruta o el autobús no fueron encontrados.' });
+        const scheduleResult = await client.query('SELECT * FROM schedules WHERE id = $1', [id]);
+        if (scheduleResult.rows.length === 0) {
+            throw new Error('Horario no encontrado');
         }
+        const existingSchedule = scheduleResult.rows[0];
 
-        // Actualizar el horario
-        const result = await db.query(`
-            UPDATE schedules 
-            SET route_id = $1, bus_id = $2, departure_time = $3, arrival_time = $4, days_of_week = $5, price_multiplier = $6, status = $7
-            WHERE id = $8
-            RETURNING *
-        `, [route_id, bus_id, departure_time, arrival_time, JSON.stringify(days_of_week), price_multiplier, status, id]);
-        
+        const fields = {
+            route_id: req.body.route_id || existingSchedule.route_id,
+            bus_id: req.body.bus_id || existingSchedule.bus_id,
+            departure_time: req.body.departure_time || existingSchedule.departure_time,
+            arrival_time: req.body.arrival_time || existingSchedule.arrival_time,
+            days_of_week: req.body.days_of_week ? JSON.stringify(req.body.days_of_week) : existingSchedule.days_of_week,
+            price_multiplier: req.body.price_multiplier || existingSchedule.price_multiplier,
+            status: req.body.status || existingSchedule.status
+        };
+
+        const result = await client.query(
+            `UPDATE schedules SET route_id = $1, bus_id = $2, departure_time = $3, arrival_time = $4, days_of_week = $5, price_multiplier = $6, status = $7 WHERE id = $8 RETURNING *`,
+            [fields.route_id, fields.bus_id, fields.departure_time, fields.arrival_time, fields.days_of_week, fields.price_multiplier, fields.status, id]
+        );
+
+        await client.query('COMMIT');
         res.json(result.rows[0]);
+
     } catch (err) {
-        console.error('Error al actualizar horario:', err);
-        res.status(500).json({ error: 'Error al actualizar horario' });
+        await client.query('ROLLBACK');
+        console.error('Error al actualizar horario:', err.message);
+        res.status(500).json({ error: err.message || 'Error al actualizar el horario.' });
+    } finally {
+        client.release();
     }
 });
 
 // Delete schedule
 router.delete('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const db = req.db;
-    
+    const client = await req.db.connect();
+
     try {
-        // Verificar que no hay reservas activas para este horario
-        const reservationsCheck = await db.query(
-            'SELECT id FROM reservations WHERE schedule_id = $1 AND status IN ($2, $3)', 
+        await client.query('BEGIN');
+
+        const reservationsCheck = await client.query(
+            'SELECT id FROM reservations WHERE schedule_id = $1 AND status IN ($2, $3) LIMIT 1',
             [id, 'pending', 'confirmed']
         );
-        
+
         if (reservationsCheck.rows.length > 0) {
-            return res.status(400).json({ 
-                error: 'No se puede eliminar el horario porque tiene reservas activas' 
-            });
+            throw new Error('No se puede eliminar el horario porque tiene reservas activas.');
         }
-        
-        // Eliminar el horario
-        const result = await db.query('DELETE FROM schedules WHERE id = $1 RETURNING *', [id]);
-        
+
+        const result = await client.query('DELETE FROM schedules WHERE id = $1 RETURNING *', [id]);
+
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Horario no encontrado' });
+            throw new Error('Horario no encontrado');
         }
-        
+
+        await client.query('COMMIT');
         res.json({ message: 'Horario eliminado exitosamente' });
+
     } catch (err) {
-        console.error('Error al eliminar horario:', err);
-        res.status(500).json({ error: 'Error al eliminar horario' });
+        await client.query('ROLLBACK');
+        console.error('Error al eliminar horario:', err.message);
+        res.status(500).json({ error: err.message || 'Error al eliminar el horario.' });
+    } finally {
+        client.release();
     }
 });
 

@@ -408,7 +408,10 @@ async function deleteBus(busId) {
     
     try {
         const response = await fetch(`/api/buses/${busId}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('No se pudo eliminar el autobús.');
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'No se pudo eliminar el autobús.');
+        }
         loadBuses(); // Recargar la lista
         alert('Autobús eliminado exitosamente.');
     } catch (error) {
@@ -640,7 +643,10 @@ async function deleteSchedule(scheduleId) {
     
     try {
         const response = await fetch(`/api/admin/schedules/${scheduleId}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('No se pudo eliminar el horario.');
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'No se pudo eliminar el horario.');
+        }
         loadSchedules(); // Recargar la lista
         alert('Horario eliminado exitosamente.');
     } catch (error) {

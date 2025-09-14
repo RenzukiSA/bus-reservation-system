@@ -83,45 +83,53 @@ router.post('/', checkAdmin, async (req, res) => {
 // Actualizar un autobús
 router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const { bus_number, type, capacity, status } = req.body;
-    
+    const client = await req.db.connect();
+
     try {
-        const existingBusResult = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
+        await client.query('BEGIN');
+
+        const existingBusResult = await client.query('SELECT * FROM buses WHERE id = $1', [id]);
         if (existingBusResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Autobús no encontrado' });
+            throw new Error('Autobús no encontrado');
         }
         const existingBus = existingBusResult.rows[0];
 
-        // Construir la consulta de actualización dinámicamente
         const fields = {
             bus_number: req.body.bus_number || existingBus.bus_number,
             type: req.body.type || existingBus.type,
-            capacity: req.body.capacity || existingBus.capacity,
+            capacity: req.body.capacity ? parseInt(req.body.capacity) : existingBus.capacity,
             status: req.body.status || existingBus.status
         };
 
-        // Verificar que el número de autobús no esté en uso por otro autobús si se está cambiando
         if (fields.bus_number !== existingBus.bus_number) {
-            const duplicateBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1 AND id != $2', [fields.bus_number, id]);
+            const duplicateBus = await client.query('SELECT id FROM buses WHERE bus_number = $1 AND id != $2', [fields.bus_number, id]);
             if (duplicateBus.rows.length > 0) {
-                return res.status(400).json({ error: 'Ya existe otro autobús con ese número' });
+                throw new Error('Ya existe otro autobús con ese número');
             }
         }
 
-        const result = await req.db.query(
+        if (fields.capacity !== existingBus.capacity) {
+            const reservationCheck = await client.query('SELECT id FROM reservations WHERE bus_id = $1 AND status IN ($2, $3) LIMIT 1', [id, 'pending', 'confirmed']);
+            if (reservationCheck.rows.length > 0) {
+                throw new Error('No se puede cambiar la capacidad de un autobús con reservas existentes.');
+            }
+            await updateSeatsForBus(client, id, fields.capacity);
+        }
+
+        const result = await client.query(
             'UPDATE buses SET bus_number = $1, type = $2, capacity = $3, status = $4 WHERE id = $5 RETURNING *',
             [fields.bus_number, fields.type, fields.capacity, fields.status, id]
         );
 
-        // Si cambió la capacidad, actualizar asientos
-        if (fields.capacity !== existingBus.capacity) {
-            await updateSeatsForBus(req.db, id, fields.capacity);
-        }
-        
+        await client.query('COMMIT');
         res.json(result.rows[0]);
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error al actualizar autobús:', err.message);
-        res.status(500).json({ error: 'Error al actualizar autobús' });
+        res.status(500).json({ error: err.message || 'Error al actualizar el autobús.' });
+    } finally {
+        client.release();
     }
 });
 
@@ -153,7 +161,7 @@ router.delete('/:id', checkAdmin, async (req, res) => {
 });
 
 // Función auxiliar para crear asientos
-async function createSeatsForBus(db, busId, capacity) {
+async function createSeatsForBus(client, busId, capacity) {
     const values = [];
     const placeholders = [];
     let paramIndex = 1;
@@ -163,21 +171,21 @@ async function createSeatsForBus(db, busId, capacity) {
         const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
         
         placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
-        values.push(busId, i.toString(), seatType, priceModifier);
+        values.push(busId, i, seatType, priceModifier);
     }
     
     if (values.length > 0) {
         const query = `INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${placeholders.join(', ')}`;
-        return db.query(query, values);
+        return client.query(query, values);
     }
 }
 
 // Función auxiliar para actualizar asientos cuando cambia la capacidad
-async function updateSeatsForBus(db, busId, newCapacity) {
+async function updateSeatsForBus(client, busId, newCapacity) {
     // Eliminar todos los asientos existentes
-    await db.query('DELETE FROM seats WHERE bus_id = $1', [busId]);
+    await client.query('DELETE FROM seats WHERE bus_id = $1', [busId]);
     // Crear nuevos asientos
-    await createSeatsForBus(db, busId, newCapacity);
+    await createSeatsForBus(client, busId, newCapacity);
 }
 
 // Función para normalizar strings (quitar acentos y a minúsculas)
