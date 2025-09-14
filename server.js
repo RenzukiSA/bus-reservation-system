@@ -34,8 +34,6 @@ async function startServer() {
         app.use(express.json());
         app.use(express.static(path.join(__dirname, 'public')));
         
-        // --- INICIO DE CAMBIO FINAL EN LA SESIÓN ---
-        // Confiar en el proxy de Render
         app.set('trust proxy', 1); 
 
         app.use((req, res, next) => {
@@ -52,19 +50,29 @@ async function startServer() {
             resave: false,
             saveUninitialized: false,
             cookie: {
-                secure: true, // Forzar HTTPS
+                secure: process.env.NODE_ENV === 'production',
                 httpOnly: true,
-                maxAge: 24 * 60 * 60 * 1000, // 24 hours
-                sameSite: 'none', // Permitir cookies entre diferentes sitios (necesario para 'secure: true')
-                domain: '.onrender.com' // Especificar el dominio
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: 'lax'
             }
         }));
-        // --- FIN DE CAMBIO FINAL EN LA SESIÓN ---
 
         app.use((req, res, next) => {
             req.adminPasswordHash = adminPasswordHash;
             next();
         });
+
+        // --- INICIO DE CÓDIGO AÑADIDO ---
+        // Ruta explícita para servir admin.html
+        app.get('/admin.html', (req, res) => {
+            // Asegurarse de que solo los administradores puedan acceder
+            if (req.session.isAdmin) {
+                res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+            } else {
+                res.redirect('/'); // Si no es admin, redirigir a la página principal
+            }
+        });
+        // --- FIN DE CÓDIGO AÑADIDO ---
 
         app.use('/api/buses', busRoutes);
         app.use('/api/reservations', reservationRoutes);
