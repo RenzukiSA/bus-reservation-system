@@ -124,12 +124,15 @@ body {
 
 /* --- Hero Section --- */
 .hero-section {
-    background-image: url('https://s3.rdbuz.com/Images/webplatform/india/hero_banner_2_1600x400.png');
-    background-size: cover;
-    background-position: center;
+    background: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)),
+                url('images/bus-terminal.png') no-repeat center center/cover;
     padding: 60px 20px;
     text-align: center;
     color: var(--text-color);
+    min-height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .hero-content h2 {
