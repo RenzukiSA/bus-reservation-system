@@ -264,8 +264,10 @@ function showEditForm(id) {
 async function handleUpdateRoute(id) {
     const origin = document.getElementById(`edit-origin-${id}`).value;
     const destination = document.getElementById(`edit-destination-${id}`).value;
+    // NOTE: This function is simplified and does not update distance/price. 
+    // A full modal form would be better for this.
     try {
-        const response = await fetch(`/api/admin/routes/${id}`, {
+        const response = await fetch(`/api/routes/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ origin, destination })
@@ -465,7 +467,7 @@ async function loadSchedules() {
         // Cargar datos necesarios para los formularios
         const [schedulesRes, routesRes, busesRes] = await Promise.all([
             fetch('/api/admin/schedules'),
-            fetch('/api/admin/routes'),
+            fetch('/api/routes'),
             fetch('/api/buses')
         ]);
         
@@ -605,17 +607,26 @@ async function editSchedule(scheduleId) {
         const response = await fetch(`/api/admin/schedules/${scheduleId}`);
         if (!response.ok) throw new Error('No se pudo cargar el horario.');
         const schedule = await response.json();
-        
+
         document.getElementById('scheduleModalTitle').textContent = 'Editar Horario';
+        document.getElementById('scheduleForm').reset();
+
         document.getElementById('scheduleRoute').value = schedule.route_id;
         document.getElementById('scheduleBus').value = schedule.bus_id;
         document.getElementById('departureTime').value = schedule.departure_time;
         document.getElementById('arrivalTime').value = schedule.arrival_time;
-        document.getElementById('schedulePrice').value = schedule.base_price;
+        document.getElementById('priceMultiplier').value = schedule.price_multiplier;
         document.getElementById('scheduleStatus').value = schedule.status;
+
+        // Marcar los checkboxes de los días de la semana
+        const days = schedule.days_of_week || [];
+        document.querySelectorAll('#scheduleForm .checkbox-group input').forEach(checkbox => {
+            checkbox.checked = days.includes(checkbox.value);
+        });
+
         document.getElementById('scheduleForm').setAttribute('data-schedule-id', scheduleId);
         document.getElementById('scheduleModal').style.display = 'flex';
-        
+
     } catch (error) {
         alert('Error al cargar el horario: ' + error.message);
     }

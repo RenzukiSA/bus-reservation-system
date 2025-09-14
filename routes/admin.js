@@ -184,10 +184,10 @@ router.get('/schedules/:id', checkAdmin, async (req, res) => {
                 s.bus_id,
                 s.departure_time,
                 s.arrival_time,
-                s.status,
-                r.base_price
+                s.days_of_week,
+                s.price_multiplier,
+                s.status
             FROM schedules s
-            JOIN routes r ON s.route_id = r.id
             WHERE s.id = $1
         `, [id]);
         
