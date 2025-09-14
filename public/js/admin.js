@@ -196,8 +196,8 @@ async function loadRoutesAdmin() {
                         <td data-label="distance">${route.distance_km || 'N/A'} km</td>
                         <td data-label="price">$${route.base_price || 'N/A'}</td>
                         <td>
-                            <button class="btn-edit" onclick="showEditForm(${route.id})">Editar</button>
-                            <button class="btn-delete" onclick="handleDeleteRoute(${route.id})">Eliminar</button>
+                            <button class="btn btn-secondary" onclick="showEditForm(${route.id})"><i class="fas fa-edit"></i> Editar</button>
+                            <button class="btn btn-danger" onclick="handleDeleteRoute(${route.id})"><i class="fas fa-trash"></i> Eliminar</button>
                         </td>
                     </tr>`;
             });

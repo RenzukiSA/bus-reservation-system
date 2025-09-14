@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// Middleware para verificar si el usuario es administrador
+const checkAdmin = (req, res, next) => {
+    if (req.session.isAdmin) {
+        next();
+    } else {
+        res.status(401).json({ error: 'Acceso no autorizado.' });
+    }
+};
+
 // --- ENDPOINTS PARA GESTIÓN DE AUTOBUSES ---
 
 // Obtener todos los autobuses
@@ -30,7 +39,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Crear un nuevo autobús
-router.post('/', async (req, res) => {
+router.post('/', checkAdmin, async (req, res) => {
     const { bus_number, type, capacity, status = 'active' } = req.body;
     
     if (!bus_number || !type || !capacity) {
@@ -61,7 +70,7 @@ router.post('/', async (req, res) => {
 });
 
 // Actualizar un autobús
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
     const { bus_number, type, capacity, status } = req.body;
     
@@ -101,7 +110,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Eliminar un autobús
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
     
     try {
