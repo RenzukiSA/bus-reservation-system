@@ -155,17 +155,6 @@ const normalizeString = (str) => {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 };
 
-// Obtener todas las rutas de origen y destino
-router.get('/routes', async (req, res) => {
-    try {
-        const result = await req.db.query('SELECT DISTINCT origin, destination FROM routes ORDER BY origin, destination');
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error al obtener las rutas:', err.message);
-        res.status(500).json({ error: 'Error al obtener las rutas' });
-    }
-});
-
 // Obtener horarios disponibles para una ruta y fecha
 router.get('/schedules', async (req, res) => {
     const { origin, destination, date } = req.query;

@@ -11,6 +11,7 @@ const { initDatabase } = require('./database/init');
 const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
+const routes = require('./routes/routes');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
@@ -76,6 +77,7 @@ async function startServer() {
         app.use('/api/buses', busRoutes);
         app.use('/api/reservations', reservationRoutes);
         app.use('/api/admin', adminRoutes);
+        app.use('/api/routes', routes);
         
         app.listen(PORT, () => {
             console.log(`Servidor corriendo en el puerto ${PORT}`);

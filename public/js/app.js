@@ -140,7 +140,7 @@ function setMinDate() {
 
 async function loadRoutes() {
     try {
-        const response = await fetch(`${API_BASE}/buses/routes`);
+        const response = await fetch(`${API_BASE}/routes/locations`);
         if (!response.ok) throw new Error('Failed to fetch routes');
         const routes = await response.json();
 
@@ -693,9 +693,9 @@ function showAdminTab(tabId) {
 
 async function loadAdminDashboard() {
     try {
-        const response = await fetch(`${API_BASE}/admin/dashboard`);
+        const response = await fetch('/api/routes/locations'); // Endpoint centralizado para obtener rutas
         if (!response.ok) {
-            throw new Error(`Error de red: ${response.statusText}`);
+            throw new Error('Error al cargar las rutas disponibles');
         }
         const data = await response.json();
 

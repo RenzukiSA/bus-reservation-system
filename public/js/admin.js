@@ -166,7 +166,7 @@ async function loadRoutesAdmin() {
     const content = document.getElementById('admin-content');
     content.innerHTML = '<p>Cargando rutas...</p>';
     try {
-        const response = await fetch('/api/admin/routes');
+        const response = await fetch('/api/routes');
         if (!response.ok) throw new Error('No se pudieron cargar las rutas.');
         const routes = await response.json();
         
@@ -218,7 +218,7 @@ async function handleCreateRoute(event) {
     const distance_km = document.getElementById('distance_km').value;
     const base_price = document.getElementById('base_price').value;
     try {
-        const response = await fetch('/api/admin/routes', {
+        const response = await fetch('/api/routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ origin, destination, distance_km: parseInt(distance_km), base_price: parseFloat(base_price) })
@@ -236,7 +236,7 @@ async function handleCreateRoute(event) {
 async function handleDeleteRoute(id) {
     if (!confirm('¿Estás seguro de que quieres eliminar esta ruta?')) return;
     try {
-        const response = await fetch(`/api/admin/routes/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/routes/${id}`, { method: 'DELETE' });
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || 'No se pudo eliminar la ruta.');

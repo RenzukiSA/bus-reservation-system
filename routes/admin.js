@@ -131,17 +131,6 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
     }
 });
 
-// Get all routes for admin
-router.get('/routes', checkAdmin, async (req, res) => {
-    const db = req.db;
-    try {
-        const result = await db.query('SELECT * FROM routes ORDER BY origin, destination');
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error al obtener rutas:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
 
 // Get all buses for admin
 router.get('/buses', checkAdmin, async (req, res) => {
@@ -345,103 +334,8 @@ router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
     }
 });
 
-// Create route
-router.post('/routes', checkAdmin, async (req, res) => {
-    const { origin, destination, distance_km, base_price } = req.body;
-    
-    if (!origin || !destination) {
-        return res.status(400).json({ error: 'Origen y destino son requeridos' });
-    }
-    
-    const db = req.db;
-    try {
-        // Verificar que no existe la misma ruta
-        const existingRoute = await db.query(
-            'SELECT id FROM routes WHERE LOWER(origin) = LOWER($1) AND LOWER(destination) = LOWER($2)',
-            [origin, destination]
-        );
-        
-        if (existingRoute.rows.length > 0) {
-            return res.status(400).json({ error: 'Ya existe una ruta con el mismo origen y destino' });
-        }
-        
-        const result = await db.query(
-            'INSERT INTO routes (origin, destination, distance_km, base_price) VALUES ($1, $2, $3, $4) RETURNING *',
-            [origin, destination, distance_km || 100, base_price || 200.00] // Valores por defecto
-        );
-        
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error('Error al crear ruta:', err);
-        res.status(500).json({ error: 'Error al crear ruta' });
-    }
-});
 
-// Update route
-router.put('/routes/:id', checkAdmin, async (req, res) => {
-    const { id } = req.params;
-    const { origin, destination } = req.body;
-    
-    if (!origin || !destination) {
-        return res.status(400).json({ error: 'Origen y destino son requeridos' });
-    }
-    
-    const db = req.db;
-    try {
-        // Verificar que la ruta existe
-        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [id]);
-        if (routeCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Ruta no encontrada' });
-        }
-        
-        // Verificar que no existe otra ruta con el mismo origen y destino
-        const duplicateRoute = await db.query(
-            'SELECT id FROM routes WHERE LOWER(origin) = LOWER($1) AND LOWER(destination) = LOWER($2) AND id != $3',
-            [origin, destination, id]
-        );
-        
-        if (duplicateRoute.rows.length > 0) {
-            return res.status(400).json({ error: 'Ya existe otra ruta con el mismo origen y destino' });
-        }
-        
-        const result = await db.query(
-            'UPDATE routes SET origin = $1, destination = $2 WHERE id = $3 RETURNING *',
-            [origin, destination, id]
-        );
-        
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error('Error al actualizar ruta:', err);
-        res.status(500).json({ error: 'Error al actualizar ruta' });
-    }
-});
 
-// Delete route
-router.delete('/routes/:id', checkAdmin, async (req, res) => {
-    const { id } = req.params;
-    const db = req.db;
-    
-    try {
-        // Verificar que no hay horarios usando esta ruta
-        const schedulesCheck = await db.query('SELECT id FROM schedules WHERE route_id = $1', [id]);
-        if (schedulesCheck.rows.length > 0) {
-            return res.status(400).json({ 
-                error: 'No se puede eliminar la ruta porque tiene horarios asociados' 
-            });
-        }
-        
-        const result = await db.query('DELETE FROM routes WHERE id = $1 RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Ruta no encontrada' });
-        }
-        
-        res.json({ message: 'Ruta eliminada exitosamente' });
-    } catch (err) {
-        console.error('Error al eliminar ruta:', err);
-        res.status(500).json({ error: 'Error al eliminar ruta' });
-    }
-});
 
 module.exports = router;
 
