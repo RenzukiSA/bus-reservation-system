@@ -23,7 +23,15 @@ const reservationForm = document.getElementById('reservationForm');
 const paymentInstructions = document.getElementById('paymentInstructions');
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Responsive Navigation --- 
+    const navToggle = document.querySelector('.nav-toggle');
+    const nav = document.querySelector('.nav');
+
+    navToggle.addEventListener('click', () => {
+        nav.classList.toggle('active');
+    });
+
     initializeApp();
     setupEventListeners();
     loadRoutes();
