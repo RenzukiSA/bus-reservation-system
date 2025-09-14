@@ -1,6 +1,6 @@
-/* Modern Admin Panel Styles - Inspired by redBus */
+/* Modern Admin Panel Styles - COMPLETE & CORRECTED */
 :root {
-    --brand-color: #d84e55; /* redBus Red */
+    --brand-color: #d84e55;
     --sidebar-bg: #f7f7f7;
     --main-bg: #fafafa;
     --card-bg: #ffffff;
@@ -24,24 +24,6 @@ body {
     overflow: hidden;
 }
 
-/* --- Responsive Design --- */
-@media (max-width: 768px) {
-    .sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        height: 100%;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        z-index: 1000;
-    }
-
-    .sidebar.active {
-        transform: translateX(0);
-    }
-
-}
-
 /* --- Sidebar --- */
 .sidebar {
     width: 260px;
@@ -50,6 +32,8 @@ body {
     flex-direction: column;
     border-right: 1px solid var(--border-color);
     flex-shrink: 0;
+    transition: transform 0.3s ease;
+    z-index: 1000;
 }
 
 .sidebar h2 {
@@ -96,11 +80,6 @@ body {
     font-weight: 600;
 }
 
-.sidebar .icon {
-    margin-right: 12px;
-    font-style: normal;
-}
-
 .logout-section {
     padding: 20px;
     border-top: 1px solid var(--border-color);
@@ -123,40 +102,17 @@ body {
     color: var(--brand-color);
 }
 
-
-.sidebar-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #333;
-    margin-right: 1rem;
-}
-
-
-.sidebar-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #333;
-    margin-right: 1rem;
-}
-
-
-.sidebar-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #333;
-    margin-right: 1rem;
-}
-
 /* --- Main Content --- */
+.sidebar-toggle {
+    display: none; /* Oculto por defecto en escritorio */
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #333;
+    margin-right: 1rem;
+}
+
 #main-content {
     flex-grow: 1;
     display: flex;
@@ -164,29 +120,27 @@ body {
     height: 100vh;
     padding: 2rem;
     overflow-y: auto;
-    transition: margin-left 0.3s ease;
 }
 
-.main-header {
-    padding: 20px 30px;
+.content-header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 1rem;
     border-bottom: 1px solid var(--border-color);
-    background-color: var(--card-bg);
-    flex-shrink: 0;
+    margin-bottom: 2rem;
 }
 
-.main-header h1 {
+#content-title {
     margin: 0;
     font-size: 1.8em;
     font-weight: 600;
 }
 
 .content-area {
-    padding: 30px;
-    overflow-y: auto;
     flex-grow: 1;
 }
 
-/* --- Components --- */
+/* --- Components (Restored) --- */
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -295,4 +249,27 @@ body {
 
 .admin-form button:hover {
     background-color: #c73e45;
+}
+
+/* --- Media Queries for Responsive --- */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100%;
+        transform: translateX(-100%);
+    }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
+    #main-content {
+        padding: 1rem;
+    }
+
+    .sidebar-toggle {
+        display: block; /* Visible en móvil */
+    }
 }
