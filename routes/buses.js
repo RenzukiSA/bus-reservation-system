@@ -136,27 +136,49 @@ router.put('/:id', checkAdmin, async (req, res) => {
 // Eliminar un autobús
 router.delete('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    
+    const client = await req.db.connect();
+
     try {
-        // Verificar que no hay horarios activos usando este autobús
-        const activeSchedules = await req.db.query('SELECT id FROM schedules WHERE bus_id = $1 AND status = $2', [id, 'active']);
-        if (activeSchedules.rows.length > 0) {
-            return res.status(400).json({ error: 'No se puede eliminar el autobús porque tiene horarios activos' });
+        await client.query('BEGIN');
+
+        // 1. Verificar que no hay reservas para ningún horario de este autobús
+        const reservationCheck = await client.query(
+            `SELECT r.id FROM reservations r
+             JOIN schedules s ON r.schedule_id = s.id
+             WHERE s.bus_id = $1 AND r.status IN ('pending', 'confirmed')
+             LIMIT 1`,
+            [id]
+        );
+
+        if (reservationCheck.rows.length > 0) {
+            throw new Error('No se puede eliminar: el autobús tiene reservas activas o pendientes.');
         }
-        
-        // Eliminar asientos del autobús
-        await req.db.query('DELETE FROM seats WHERE bus_id = $1', [id]);
-        
-        // Eliminar el autobús
-        const result = await req.db.query('DELETE FROM buses WHERE id = $1 RETURNING *', [id]);
+
+        // 2. Verificar que no hay horarios activos
+        const scheduleCheck = await client.query('SELECT id FROM schedules WHERE bus_id = $1 AND status = $2 LIMIT 1', [id, 'active']);
+        if (scheduleCheck.rows.length > 0) {
+            throw new Error('No se puede eliminar: el autobús está asignado a horarios activos.');
+        }
+
+        // 3. Eliminar asientos (ahora es seguro hacerlo)
+        await client.query('DELETE FROM seats WHERE bus_id = $1', [id]);
+
+        // 4. Eliminar el autobús
+        const result = await client.query('DELETE FROM buses WHERE id = $1 RETURNING *', [id]);
+
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Autobús no encontrado' });
+            throw new Error('Autobús no encontrado');
         }
-        
+
+        await client.query('COMMIT');
         res.json({ message: 'Autobús eliminado exitosamente' });
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error al eliminar autobús:', err.message);
-        res.status(500).json({ error: 'Error al eliminar autobús' });
+        res.status(500).json({ error: err.message || 'Error al eliminar el autobús.' });
+    } finally {
+        client.release();
     }
 });
 
