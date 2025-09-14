@@ -4,26 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Reservas de Autobuses</title>
-    <link rel="stylesheet" href="css/styles.css?v=1.3">
+    <link rel="stylesheet" href="css/styles.css?v=1.4">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <header class="header">
-        <div class="container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
             <div class="logo">
                 <i class="fas fa-bus"></i>
-                <h1>Transportes Express</h1>
+                <span>Transportes Express</span>
             </div>
-            <nav class="nav">
-                <a href="#home" class="nav-link active">Inicio</a>
-                <a href="#reservations" class="nav-link">Mis Reservas</a>
-                <a href="#admin" class="nav-link">Admin</a>
-            </nav>
-            <button class="nav-toggle" aria-label="Abrir menú">
-                <i class="fas fa-bars"></i>
-            </button>
         </div>
-    </header>
+        <ul class="sidebar-menu">
+            <li class="menu-item">
+                <a href="#home" class="nav-link active">
+                    <i class="fas fa-home"></i>
+                    <span>Inicio</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#reservations" class="nav-link">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Mis Reservas</span>
+                </a>
+            </li>
+            <li class="menu-item">
+                <a href="#admin" class="nav-link">
+                    <i class="fas fa-user-shield"></i>
+                    <span>Admin</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Mobile Menu Toggle -->
+    <button class="sidebar-toggle" aria-label="Abrir menú">
+        <i class="fas fa-bars"></i>
+    </button>
 
     <main class="main">
         <!-- Home Section -->

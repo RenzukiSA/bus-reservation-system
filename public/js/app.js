@@ -24,13 +24,25 @@ const paymentInstructions = document.getElementById('paymentInstructions');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Responsive Navigation --- 
-    const navToggle = document.querySelector('.nav-toggle');
-    const nav = document.querySelector('.nav');
+    // --- Responsive Sidebar Navigation --- 
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
 
-    navToggle.addEventListener('click', () => {
-        nav.classList.toggle('active');
-    });
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !sidebarToggle.contains(e.target) && 
+                sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+            }
+        });
+    }
 
     initializeApp();
     setupEventListeners();
