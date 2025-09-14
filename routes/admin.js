@@ -41,12 +41,13 @@ router.post('/logout', (req, res) => {
             return res.status(500).json({ error: 'No se pudo cerrar la sesión.' });
         }
         res.clearCookie('connect.sid');
-        res.json({ success: true, message: 'Sesión cerrada exitosamente.' });
+        res.json({ success: true });
     });
 });
 
-// Check session status
+// Verificar estado de la sesión
 router.get('/status', (req, res) => {
+    res.json({ isAdmin: !!req.session.isAdmin });
     if (req.session.isAdmin) {
         res.json({ isAdmin: true });
     } else {
