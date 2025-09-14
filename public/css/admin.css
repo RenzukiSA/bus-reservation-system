@@ -40,19 +40,6 @@ body {
         transform: translateX(0);
     }
 
-    #main-content {
-        margin-left: 0;
-        padding: 1rem;
-    }
-
-    .sidebar-toggle {
-        display: block; /* Visible en móvil */
-    }
-
-    .content-header {
-        display: flex;
-        align-items: center;
-    }
 }
 
 /* --- Sidebar --- */
@@ -136,8 +123,31 @@ body {
     color: var(--brand-color);
 }
 
+
 .sidebar-toggle {
-    display: none; /* Oculto en PC */
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #333;
+    margin-right: 1rem;
+}
+
+
+.sidebar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #333;
+    margin-right: 1rem;
+}
+
+
+.sidebar-toggle {
+    display: none;
     background: none;
     border: none;
     font-size: 1.5rem;
