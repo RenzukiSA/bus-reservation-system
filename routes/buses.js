@@ -74,32 +74,37 @@ router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
     const { bus_number, type, capacity, status } = req.body;
     
-    if (!bus_number || !type || !capacity || !status) {
-        return res.status(400).json({ error: 'Todos los campos son requeridos' });
-    }
-    
     try {
-        // Verificar que el autobús existe
-        const existingBus = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
-        if (existingBus.rows.length === 0) {
+        const existingBusResult = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
+        if (existingBusResult.rows.length === 0) {
             return res.status(404).json({ error: 'Autobús no encontrado' });
         }
-        
-        // Verificar que el número de autobús no esté en uso por otro autobús
-        const duplicateBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1 AND id != $2', [bus_number, id]);
-        if (duplicateBus.rows.length > 0) {
-            return res.status(400).json({ error: 'Ya existe otro autobús con ese número' });
+        const existingBus = existingBusResult.rows[0];
+
+        // Construir la consulta de actualización dinámicamente
+        const fields = {
+            bus_number: req.body.bus_number || existingBus.bus_number,
+            type: req.body.type || existingBus.type,
+            capacity: req.body.capacity || existingBus.capacity,
+            status: req.body.status || existingBus.status
+        };
+
+        // Verificar que el número de autobús no esté en uso por otro autobús si se está cambiando
+        if (fields.bus_number !== existingBus.bus_number) {
+            const duplicateBus = await req.db.query('SELECT id FROM buses WHERE bus_number = $1 AND id != $2', [fields.bus_number, id]);
+            if (duplicateBus.rows.length > 0) {
+                return res.status(400).json({ error: 'Ya existe otro autobús con ese número' });
+            }
         }
-        
+
         const result = await req.db.query(
             'UPDATE buses SET bus_number = $1, type = $2, capacity = $3, status = $4 WHERE id = $5 RETURNING *',
-            [bus_number, type, capacity, status, id]
+            [fields.bus_number, fields.type, fields.capacity, fields.status, id]
         );
-        
+
         // Si cambió la capacidad, actualizar asientos
-        const oldCapacity = existingBus.rows[0].capacity;
-        if (oldCapacity !== capacity) {
-            await updateSeatsForBus(req.db, id, capacity);
+        if (fields.capacity !== existingBus.capacity) {
+            await updateSeatsForBus(req.db, id, fields.capacity);
         }
         
         res.json(result.rows[0]);
@@ -142,7 +147,7 @@ async function createSeatsForBus(db, busId, capacity) {
     for (let i = 1; i <= capacity; i++) {
         const seatType = i <= 4 ? 'premium' : 'standard'; // Primeros 4 asientos son premium
         const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
-        seatInserts.push(`(${busId}, '${i}', '${seatType}', ${priceModifier})`);
+        seatInserts.push(`(${parseInt(busId)}, '${i}', '${seatType}', ${parseFloat(priceModifier)})`);
     }
     
     if (seatInserts.length > 0) {

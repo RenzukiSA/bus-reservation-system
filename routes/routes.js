@@ -72,14 +72,23 @@ router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
     const { origin, destination, distance_km, base_price } = req.body;
     
-    if (!origin || !destination || !distance_km || !base_price) {
-        return res.status(400).json({ error: 'Todos los campos son requeridos' });
-    }
-    
     try {
+        const existingRouteResult = await req.db.query('SELECT * FROM routes WHERE id = $1', [id]);
+        if (existingRouteResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Ruta no encontrada' });
+        }
+        const existingRoute = existingRouteResult.rows[0];
+
+        const fields = {
+            origin: req.body.origin || existingRoute.origin,
+            destination: req.body.destination || existingRoute.destination,
+            distance_km: req.body.distance_km || existingRoute.distance_km,
+            base_price: req.body.base_price || existingRoute.base_price
+        };
+
         const result = await req.db.query(
             'UPDATE routes SET origin = $1, destination = $2, distance_km = $3, base_price = $4 WHERE id = $5 RETURNING *',
-            [origin, destination, distance_km, base_price, id]
+            [fields.origin, fields.destination, fields.distance_km, fields.base_price, id]
         );
 
         if (result.rows.length === 0) {
