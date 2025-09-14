@@ -25,42 +25,35 @@
     <main class="main">
         <!-- Home Section -->
         <section id="home" class="section active">
-            <div class="container">
-                <div class="hero">
-                    <h2>Reserva tu viaje de manera fácil y segura</h2>
-                    <p>Selecciona tu ruta, fecha y asientos. ¡Viaja cómodo con nosotros!</p>
-                </div>
-
-                <!-- Search Form -->
-                <div class="search-card">
-                    <h3><i class="fas fa-search"></i> Buscar Viajes</h3>
-                    <form id="searchForm" class="search-form">
-                        <div class="form-row">
+            <div class="hero-section">
+                <div class="hero-content">
+                    <h2>Viaja a tu destino favorito</h2>
+                    <p>Compra tus pasajes de bus sin salir de casa</p>
+                    <div class="search-card">
+                        <form id="searchForm" class="search-form">
                             <div class="form-group">
-                                <label for="origin">Origen</label>
+                                <label for="origin"><i class="fas fa-map-marker-alt"></i> Desde</label>
                                 <select id="origin" required>
-                                    <option value="">Selecciona origen</option>
+                                    <option value="" disabled selected>Selecciona origen</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="destination">Destino</label>
+                                <label for="destination"><i class="fas fa-exchange-alt"></i> Hasta</label>
                                 <select id="destination" required>
-                                    <option value="">Selecciona destino</option>
+                                    <option value="" disabled selected>Selecciona destino</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="travelDate">Fecha de viaje</label>
+                                <label for="travelDate"><i class="fas fa-calendar-alt"></i> Fecha de ida</label>
                                 <input type="date" id="travelDate" required>
                             </div>
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search"></i> Buscar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                            <button type="submit" class="btn btn-primary">BUSCAR</button>
+                        </form>
+                    </div>
                 </div>
+            </div>
 
+            <div class="container page-content">
                 <!-- Loading -->
                 <div id="loading" class="loading hidden">
                     <i class="fas fa-spinner fa-spin"></i>
