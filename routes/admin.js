@@ -360,7 +360,7 @@ router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
 
 // Create route
 router.post('/routes', checkAdmin, async (req, res) => {
-    const { origin, destination } = req.body;
+    const { origin, destination, distance_km, base_price } = req.body;
     
     if (!origin || !destination) {
         return res.status(400).json({ error: 'Origen y destino son requeridos' });
@@ -379,8 +379,8 @@ router.post('/routes', checkAdmin, async (req, res) => {
         }
         
         const result = await db.query(
-            'INSERT INTO routes (origin, destination, base_price) VALUES ($1, $2, $3) RETURNING *',
-            [origin, destination, 50.00] // Precio base por defecto
+            'INSERT INTO routes (origin, destination, distance_km, base_price) VALUES ($1, $2, $3, $4) RETURNING *',
+            [origin, destination, distance_km || 100, base_price || 200.00] // Valores por defecto
         );
         
         res.status(201).json(result.rows[0]);

@@ -176,21 +176,25 @@ async function loadRoutesAdmin() {
                 <form id="add-route-form">
                     <div class="form-group"><label for="origin">Origen</label><input type="text" id="origin" required></div>
                     <div class="form-group"><label for="destination">Destino</label><input type="text" id="destination" required></div>
+                    <div class="form-group"><label for="distance_km">Distancia (km)</label><input type="number" id="distance_km" min="1" placeholder="100" required></div>
+                    <div class="form-group"><label for="base_price">Precio Base ($)</label><input type="number" id="base_price" min="0" step="0.01" placeholder="200.00" required></div>
                     <button type="submit">Añadir Ruta</button>
                 </form>
             </div>
             <table class="admin-table">
-                <thead><tr><th>Origen</th><th>Destino</th><th>Acciones</th></tr></thead>
+                <thead><tr><th>Origen</th><th>Destino</th><th>Distancia (km)</th><th>Precio Base</th><th>Acciones</th></tr></thead>
                 <tbody>`;
         
         if (routes.length === 0) {
-            contentHTML += '<tr><td colspan="3" style="text-align: center;">No hay rutas definidas.</td></tr>';
+            contentHTML += '<tr><td colspan="5" style="text-align: center;">No hay rutas definidas.</td></tr>';
         } else {
             routes.forEach(route => {
                 contentHTML += `
                     <tr data-id="${route.id}">
                         <td data-label="origin">${route.origin}</td>
                         <td data-label="destination">${route.destination}</td>
+                        <td data-label="distance">${route.distance_km || 'N/A'} km</td>
+                        <td data-label="price">$${route.base_price || 'N/A'}</td>
                         <td>
                             <button class="btn-edit" onclick="showEditForm(${route.id})">Editar</button>
                             <button class="btn-delete" onclick="handleDeleteRoute(${route.id})">Eliminar</button>
@@ -211,11 +215,13 @@ async function handleCreateRoute(event) {
     event.preventDefault();
     const origin = document.getElementById('origin').value;
     const destination = document.getElementById('destination').value;
+    const distance_km = document.getElementById('distance_km').value;
+    const base_price = document.getElementById('base_price').value;
     try {
         const response = await fetch('/api/admin/routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ origin, destination })
+            body: JSON.stringify({ origin, destination, distance_km: parseInt(distance_km), base_price: parseFloat(base_price) })
         });
         if (!response.ok) {
             const err = await response.json();
