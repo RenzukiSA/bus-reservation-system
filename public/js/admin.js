@@ -1,4 +1,11 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    // --- Responsive Sidebar --- 
+    const sidebarToggle = document.querySelector('.sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
+
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('active');
+    });
     const isAdmin = await checkAuth();
     if (!isAdmin) {
         window.location.href = '/';
