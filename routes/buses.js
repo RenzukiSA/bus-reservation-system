@@ -197,7 +197,7 @@ async function createSeatsForBus(client, busId, capacity) {
     }
     
     if (values.length > 0) {
-        const query = `INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${placeholders.join(', ')}`;
+        const query = `INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${placeholders.join(', ')};`;
         return client.query(query, values);
     }
 }
