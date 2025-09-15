@@ -329,7 +329,7 @@ router.get('/seats/:schedule_id', async (req, res) => {
             if (r.reservation_type === 'full_bus') {
                 hasFullBusReservation = true;
             } else if (r.seats_reserved) {
-                JSON.parse(r.seats_reserved).forEach(id => reservedSeatIds.add(id));
+                JSON.parse(r.seats_reserved).forEach(id => reservedSeatIds.add(parseInt(id, 10)));
             }
         });
 
