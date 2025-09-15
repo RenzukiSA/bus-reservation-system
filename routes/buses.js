@@ -245,10 +245,10 @@ router.get('/schedules', async (req, res) => {
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             JOIN buses b ON s.bus_id = b.id
-            WHERE r.id = $1 AND (s.days_of_week LIKE '%"daily"%' OR s.days_of_week LIKE $2)
+            WHERE r.id = $1 AND (s.days_of_week::jsonb ? 'daily' OR s.days_of_week::jsonb ? $2)
             ORDER BY s.departure_time;
         `;
-        const queryParams = [matchedRoute.id, `%"${dayOfWeek}"%`];
+        const queryParams = [matchedRoute.id, dayOfWeek];
 
         const schedulesResult = await req.db.query(schedulesQuery, queryParams);
         const schedules = schedulesResult.rows;
