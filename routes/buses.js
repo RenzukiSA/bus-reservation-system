@@ -281,7 +281,7 @@ router.get('/schedules', async (req, res) => {
                 ...schedule,
                 available_seats: availableSeats,
                 is_full_bus_available: isFullBusAvailable,
-                full_bus_price: (schedule.base_total_price * schedule.capacity * 0.9).toFixed(2)
+                full_bus_price: (schedule.base_total_price * parseInt(schedule.capacity, 10) * 0.9).toFixed(2)
             };
         }));
 

@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
             if (r.reservation_type === 'full_bus') {
                 isFullBusReserved = true;
             } else {
-                const seats = JSON.parse(r.seats_reserved || '[]');
+                const seats = JSON.parse(r.seats_reserved || '[]').map(id => parseInt(id, 10));
                 reservedSeatIds.push(...seats);
             }
         });
