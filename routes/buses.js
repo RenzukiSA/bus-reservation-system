@@ -224,17 +224,20 @@ router.get('/schedules', async (req, res) => {
     }
 
     try {
-        // 1. Encontrar la ruta
-        const allRoutesResult = await req.db.query('SELECT id, origin, destination FROM routes');
+        // 1. Encontrar la ruta de forma más robusta en la BD
         const normalizedOrigin = normalizeString(origin);
         const normalizedDestination = normalizeString(destination);
-        const matchedRoute = allRoutesResult.rows.find(r => 
-            normalizeString(r.origin) === normalizedOrigin && normalizeString(r.destination) === normalizedDestination
-        );
 
-        if (!matchedRoute) {
-            return res.json([]);
+        const routeQuery = `
+            SELECT id FROM routes 
+            WHERE lower(origin) = $1 AND lower(destination) = $2
+        `;
+        const routeResult = await req.db.query(routeQuery, [normalizedOrigin, normalizedDestination]);
+
+        if (routeResult.rows.length === 0) {
+            return res.json([]); // No se encontró la ruta
         }
+        const matchedRoute = routeResult.rows[0];
 
         // 2. Buscar horarios
         const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
