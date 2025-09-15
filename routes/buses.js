@@ -244,6 +244,7 @@ router.get('/schedules', async (req, res) => {
                 s.id as schedule_id, 
                 s.departure_time, 
                 s.arrival_time, 
+                b.id as bus_id,
                 b.type as bus_type, 
                 b.capacity, 
                 b.bus_number,
