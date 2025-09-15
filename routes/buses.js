@@ -218,6 +218,8 @@ router.get('/schedules', async (req, res) => {
     }
 
     try {
+        console.log(`[DEBUG] Iniciando búsqueda de horarios con: origin=${origin}, destination=${destination}, date=${date}`);
+
         // 1. Encontrar la ruta usando ILIKE para una comparación insensible a mayúsculas/minúsculas
         const routeQuery = `
             SELECT id FROM routes WHERE origin ILIKE $1 AND destination ILIKE $2
@@ -225,12 +227,15 @@ router.get('/schedules', async (req, res) => {
         const routeResult = await req.db.query(routeQuery, [origin, destination]);
 
         if (routeResult.rows.length === 0) {
+            console.log(`[DEBUG] No se encontró ninguna ruta para origin=${origin}, destination=${destination}`);
             return res.json([]); // No se encontró la ruta
         }
         const matchedRoute = routeResult.rows[0];
+        console.log(`[DEBUG] Ruta encontrada con ID: ${matchedRoute.id}`);
 
         // 2. Buscar horarios
         const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        console.log(`[DEBUG] Día de la semana calculado: ${dayOfWeek}`);
         
         const schedulesQuery = `
             SELECT 
@@ -251,10 +256,14 @@ router.get('/schedules', async (req, res) => {
         const queryParams = [matchedRoute.id, dayOfWeek];
 
         const schedulesResult = await req.db.query(schedulesQuery, queryParams);
-        const schedules = schedulesResult.rows;
+        console.log(`[DEBUG] Se encontraron ${schedulesResult.rows.length} horarios antes de calcular disponibilidad.`);
+
+        if (schedulesResult.rows.length === 0) {
+            return res.json([]);
+        }
 
         // 3. Calcular disponibilidad
-        const schedulesWithAvailability = await Promise.all(schedules.map(async (schedule) => {
+        const schedulesWithAvailability = await Promise.all(schedulesResult.rows.map(async (schedule) => {
             const reservationsResult = await req.db.query(
                 `SELECT reservation_type, seats_reserved FROM reservations WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')`,
                 [schedule.schedule_id, date]
