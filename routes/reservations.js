@@ -23,7 +23,7 @@ router.post('/', async (req, res) => {
     try {
         // 1. Get schedule info
         const scheduleQuery = `
-            SELECT s.*, r.base_price, b.capacity 
+            SELECT s.*, r.base_price, s.price_multiplier, b.capacity 
             FROM schedules s
             JOIN routes r ON s.route_id = r.id
             JOIN buses b ON s.bus_id = b.id
