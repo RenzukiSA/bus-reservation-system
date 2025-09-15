@@ -277,7 +277,7 @@ router.get('/schedules', async (req, res) => {
                 }
             });
 
-            const availableSeats = isFullBusReserved ? 0 : schedule.capacity - reservedSeatIds.length;
+            const availableSeats = isFullBusReserved ? 0 : parseInt(schedule.capacity, 10) - reservedSeatIds.length;
             const isFullBusAvailable = !isFullBusReserved && reservedSeatIds.length === 0;
 
             return {
