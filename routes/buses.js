@@ -210,12 +210,6 @@ async function updateSeatsForBus(client, busId, newCapacity) {
     await createSeatsForBus(client, busId, newCapacity);
 }
 
-// Función para normalizar strings (quitar acentos y a minúsculas)
-const normalizeString = (str) => {
-    if (!str) return '';
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-};
-
 // Obtener horarios disponibles para una ruta y fecha
 router.get('/schedules', async (req, res) => {
     const { origin, destination, date } = req.query;
@@ -224,15 +218,11 @@ router.get('/schedules', async (req, res) => {
     }
 
     try {
-        // 1. Encontrar la ruta de forma más robusta en la BD
-        const normalizedOrigin = normalizeString(origin);
-        const normalizedDestination = normalizeString(destination);
-
+        // 1. Encontrar la ruta usando ILIKE para una comparación insensible a mayúsculas/minúsculas
         const routeQuery = `
-            SELECT id FROM routes 
-            WHERE lower(origin) = $1 AND lower(destination) = $2
+            SELECT id FROM routes WHERE origin ILIKE $1 AND destination ILIKE $2
         `;
-        const routeResult = await req.db.query(routeQuery, [normalizedOrigin, normalizedDestination]);
+        const routeResult = await req.db.query(routeQuery, [origin, destination]);
 
         if (routeResult.rows.length === 0) {
             return res.json([]); // No se encontró la ruta
