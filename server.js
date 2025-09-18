@@ -6,7 +6,7 @@ if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
 }
 
-const { Pool } = require('pg');
+const pool = require('./database/db'); // Importar el pool centralizado
 const { initDatabase } = require('./database/init');
 const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
@@ -19,16 +19,10 @@ const bcrypt = require('bcrypt');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
 async function startServer() {
     try {
         await initDatabase(pool);
-        const adminPasswordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
-        console.log('Admin password hashed and ready.');
+        console.log('Base de datos inicializada correctamente.');
 
         app.use(cors());
         app.use(express.json());
@@ -36,14 +30,9 @@ async function startServer() {
         
         app.set('trust proxy', 1); 
 
-        app.use((req, res, next) => {
-            req.db = pool;
-            next();
-        });
-
         app.use(session({
             store: new pgSession({
-                pool: pool,
+                pool: pool, // Usar el pool importado
                 tableName: 'user_sessions'
             }),
             secret: process.env.SESSION_SECRET,
@@ -56,11 +45,6 @@ async function startServer() {
                 sameSite: 'lax'
             }
         }));
-
-        app.use((req, res, next) => {
-            req.adminPasswordHash = adminPasswordHash;
-            next();
-        });
 
         // --- INICIO DE CÓDIGO AÑADIDO ---
         // Ruta explícita para servir admin.html
@@ -79,9 +63,12 @@ async function startServer() {
         app.use('/api/admin', adminRoutes);
         app.use('/api/locations', locationRoutes);
         
-        app.listen(PORT, () => {
-            console.log(`Servidor corriendo en el puerto ${PORT}`);
-        });
+        // Iniciar el servidor solo si el archivo se ejecuta directamente
+        if (require.main === module) {
+            app.listen(PORT, () => {
+                console.log(`Servidor corriendo en el puerto ${PORT}`);
+            });
+        }
 
     } catch (error) {
         console.error('Error fatal al iniciar el servidor:', error);

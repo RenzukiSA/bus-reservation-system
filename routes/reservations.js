@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
+const pool = require('../database/db');
 
 // Create a new reservation
 router.post('/', async (req, res) => {
@@ -18,8 +19,6 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'Faltan campos requeridos' });
     }
 
-    const db = req.db; // This is the pg pool
-
     try {
         // 1. Get schedule info
         const scheduleQuery = `
@@ -29,7 +28,7 @@ router.post('/', async (req, res) => {
             JOIN buses b ON s.bus_id = b.id
             WHERE s.id = $1
         `;
-        const scheduleResult = await db.query(scheduleQuery, [schedule_id]);
+        const scheduleResult = await pool.query(scheduleQuery, [schedule_id]);
         if (scheduleResult.rows.length === 0) {
             return res.status(404).json({ error: 'Horario no encontrado' });
         }
@@ -41,7 +40,7 @@ router.post('/', async (req, res) => {
             FROM reservations 
             WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')
         `;
-        const existingReservationsResult = await db.query(existingReservationsQuery, [schedule_id, reservation_date]);
+        const existingReservationsResult = await pool.query(existingReservationsQuery, [schedule_id, reservation_date]);
 
         let reservedSeatIds = [];
         let isFullBusReserved = false;
@@ -77,7 +76,7 @@ router.post('/', async (req, res) => {
 
             const placeholders = selected_seats.map((_, i) => `$${i + 1}`).join(',');
             const seatsQuery = `SELECT price_modifier FROM seats WHERE id IN (${placeholders})`;
-            const seatsResult = await db.query(seatsQuery, selected_seats);
+            const seatsResult = await pool.query(seatsQuery, selected_seats);
             
             totalPrice = seatsResult.rows.reduce((sum, seat) => {
                 return sum + (scheduleInfo.base_price * scheduleInfo.price_multiplier * seat.price_modifier);
@@ -103,7 +102,7 @@ router.post('/', async (req, res) => {
             customer_name, customer_phone, customer_email, totalPrice.toFixed(2), paymentDeadline.toISOString()
         ];
         
-        await db.query(insertQuery, insertParams);
+        await pool.query(insertQuery, insertParams);
 
         res.status(201).json({
             success: true,
@@ -122,7 +121,6 @@ router.post('/', async (req, res) => {
 // Get reservation details
 router.get('/:reservationId', async (req, res) => {
     const { reservationId } = req.params;
-    const db = req.db;
 
     try {
         const query = `
@@ -140,7 +138,7 @@ router.get('/:reservationId', async (req, res) => {
             JOIN buses b ON s.bus_id = b.id
             WHERE res.id = $1
         `;
-        const result = await db.query(query, [reservationId]);
+        const result = await pool.query(query, [reservationId]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Reservación no encontrada' });
@@ -154,7 +152,7 @@ router.get('/:reservationId', async (req, res) => {
                 const seatIds = JSON.parse(reservation.seats_reserved);
                 const placeholders = seatIds.map((_, i) => `$${i + 1}`).join(',');
                 const seatsQuery = `SELECT seat_number, seat_type FROM seats WHERE id IN (${placeholders})`;
-                const seatsResult = await db.query(seatsQuery, seatIds);
+                const seatsResult = await pool.query(seatsQuery, seatIds);
 
                 res.json({
                     ...reservation,
@@ -175,7 +173,6 @@ router.get('/:reservationId', async (req, res) => {
 // Confirm payment (admin endpoint)
 router.put('/:reservationId/confirm', async (req, res) => {
     const { reservationId } = req.params;
-    const db = req.db;
 
     try {
         const query = `
@@ -183,7 +180,7 @@ router.put('/:reservationId/confirm', async (req, res) => {
             SET status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP
             WHERE id = $1 AND status = 'pending'
         `;
-        const result = await db.query(query, [reservationId]);
+        const result = await pool.query(query, [reservationId]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Reservación no encontrada o ya procesada' });
@@ -199,7 +196,6 @@ router.put('/:reservationId/confirm', async (req, res) => {
 // Cancel reservation
 router.put('/:reservationId/cancel', async (req, res) => {
     const { reservationId } = req.params;
-    const db = req.db;
 
     try {
         const query = `
@@ -207,7 +203,7 @@ router.put('/:reservationId/cancel', async (req, res) => {
             SET status = 'cancelled'
             WHERE id = $1 AND status IN ('pending', 'confirmed')
         `;
-        const result = await db.query(query, [reservationId]);
+        const result = await pool.query(query, [reservationId]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Reservación no encontrada o no puede ser cancelada' });
@@ -222,8 +218,6 @@ router.put('/:reservationId/cancel', async (req, res) => {
 
 // Auto-expire pending reservations (called by cron job)
 router.post('/expire-pending', async (req, res) => {
-    const db = req.db;
-
     try {
         const query = `
             UPDATE reservations 
@@ -231,7 +225,7 @@ router.post('/expire-pending', async (req, res) => {
             WHERE status = 'pending' 
             AND payment_deadline < CURRENT_TIMESTAMP
         `;
-        const result = await db.query(query);
+        const result = await pool.query(query);
 
         res.json({ 
             message: `${result.rowCount} reservaciones expiradas`,

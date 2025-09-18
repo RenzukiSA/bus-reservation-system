@@ -6,6 +6,9 @@ async function initDatabase(pool) {
     console.log('Conexión exitosa. Creando tablas si no existen...');
 
     try {
+        // Habilitar la extensión para generar UUIDs
+        await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+
         // --- INICIO DE CÓDIGO AÑADIDO ---
         // Tabla para sesiones de usuario (connect-pg-simple)
         await client.query(`
@@ -33,9 +36,10 @@ async function initDatabase(pool) {
         await client.query(`
             CREATE TABLE IF NOT EXISTS buses (
                 id SERIAL PRIMARY KEY,
-                bus_number VARCHAR(10) UNIQUE NOT NULL,
-                type VARCHAR(20) NOT NULL,
-                capacity INT NOT NULL
+                bus_number VARCHAR(20) UNIQUE NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                capacity INT NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'active' -- active, inactive, maintenance
             );
         `);
 
@@ -43,9 +47,9 @@ async function initDatabase(pool) {
         await client.query(`
             CREATE TABLE IF NOT EXISTS seats (
                 id SERIAL PRIMARY KEY,
-                bus_id INT REFERENCES buses(id),
-                seat_number VARCHAR(5) NOT NULL,
-                seat_type VARCHAR(20) NOT NULL,
+                bus_id INT REFERENCES buses(id) ON DELETE CASCADE,
+                seat_number VARCHAR(10) NOT NULL,
+                seat_type VARCHAR(20) NOT NULL, -- standard, premium
                 price_modifier NUMERIC(4, 2) DEFAULT 1.0,
                 UNIQUE(bus_id, seat_number)
             );
@@ -57,8 +61,9 @@ async function initDatabase(pool) {
                 id SERIAL PRIMARY KEY,
                 origin VARCHAR(100) NOT NULL,
                 destination VARCHAR(100) NOT NULL,
-                distance_km INT NOT NULL,
-                base_price NUMERIC(10, 2) NOT NULL
+                distance_km INT,
+                base_price NUMERIC(10, 2) NOT NULL,
+                UNIQUE(origin, destination)
             );
         `);
 
@@ -66,12 +71,13 @@ async function initDatabase(pool) {
         await client.query(`
             CREATE TABLE IF NOT EXISTS schedules (
                 id SERIAL PRIMARY KEY,
-                route_id INT REFERENCES routes(id),
-                bus_id INT REFERENCES buses(id),
+                route_id INT REFERENCES routes(id) ON DELETE RESTRICT,
+                bus_id INT REFERENCES buses(id) ON DELETE RESTRICT,
                 departure_time TIME NOT NULL,
                 arrival_time TIME NOT NULL,
-                days_of_week TEXT NOT NULL,
-                price_multiplier NUMERIC(4, 2) DEFAULT 1.0
+                days_of_week JSONB NOT NULL, -- ['monday', 'tuesday', ... 'daily']
+                price_multiplier NUMERIC(4, 2) DEFAULT 1.0,
+                status VARCHAR(20) NOT NULL DEFAULT 'active' -- active, cancelled, finished
             );
         `);
 
@@ -79,22 +85,30 @@ async function initDatabase(pool) {
         await client.query(`
             CREATE TABLE IF NOT EXISTS reservations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                schedule_id INT REFERENCES schedules(id),
-                customer_name VARCHAR(100) NOT NULL,
-                customer_phone VARCHAR(20) NOT NULL,
+                schedule_id INT REFERENCES schedules(id) ON DELETE RESTRICT,
+                customer_name VARCHAR(150) NOT NULL,
+                customer_phone VARCHAR(30) NOT NULL,
                 customer_email VARCHAR(100),
                 reservation_date DATE NOT NULL,
-                reservation_type VARCHAR(20) NOT NULL,
-                seats_reserved TEXT,
+                reservation_type VARCHAR(20) NOT NULL, -- seats, full_bus
+                seats_reserved JSONB, -- Array de IDs de asientos
                 total_price NUMERIC(10, 2) NOT NULL,
-                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, confirmed, cancelled, expired
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 payment_deadline TIMESTAMPTZ,
                 confirmed_at TIMESTAMPTZ
             );
         `);
 
-        console.log('Tablas creadas o ya existentes.');
+        // --- ÍNDICES PARA MEJORAR EL RENDIMIENTO ---
+        await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_route_id ON schedules(route_id);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_bus_id ON schedules(bus_id);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_reservations_schedule_id_date ON reservations(schedule_id, reservation_date);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_seats_bus_id ON seats(bus_id);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_routes_origin_destination ON routes(origin, destination);');
+
+        console.log('Tablas e índices creados o ya existentes.');
         await insertSampleData(client);
 
         client.release();
@@ -117,15 +131,15 @@ async function insertSampleData(client) {
 
         // Insertar buses y asientos
         const buses = [
-            { number: 'E-101', type: 'ejecutivo', capacity: 36 },
-            { number: 'P-202', type: 'primera_clase', capacity: 40 },
-            { number: 'C-303', type: 'economico', capacity: 44 }
+            { number: 'E-101', type: 'ejecutivo', capacity: 36, status: 'active' },
+            { number: 'P-202', type: 'primera_clase', capacity: 40, status: 'active' },
+            { number: 'C-303', type: 'economico', capacity: 44, status: 'inactive' }
         ];
 
         for (const bus of buses) {
             const busRes = await client.query(
-                'INSERT INTO buses (bus_number, type, capacity) VALUES ($1, $2, $3) RETURNING id',
-                [bus.number, bus.type, bus.capacity]
+                'INSERT INTO buses (bus_number, type, capacity, status) VALUES ($1, $2, $3, $4) RETURNING id',
+                [bus.number, bus.type, bus.capacity, bus.status]
             );
             const busId = busRes.rows[0].id;
 
@@ -152,11 +166,11 @@ async function insertSampleData(client) {
 
         // Insertar horarios
         await client.query(`
-            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier) VALUES
-            (1, 1, '09:00:00', '12:00:00', '["daily"]', 1.1),
-            (1, 3, '15:00:00', '18:30:00', '["monday", "wednesday", "friday"]', 1.0),
-            (2, 1, '10:00:00', '13:00:00', '["daily"]', 1.1),
-            (3, 2, '08:00:00', '10:00:00', '["saturday", "sunday"]', 1.05);
+            INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier, status) VALUES
+            (1, 1, '09:00:00', '12:00:00', '["daily"]', 1.1, 'active'),
+            (1, 2, '15:00:00', '18:30:00', '["monday", "wednesday", "friday"]', 1.0, 'active'),
+            (2, 1, '10:00:00', '13:00:00', '["daily"]', 1.1, 'active'),
+            (3, 2, '08:00:00', '10:00:00', '["saturday", "sunday"]', 1.05, 'active');
         `);
 
         console.log('Datos de ejemplo insertados correctamente.');

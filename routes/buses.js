@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const pool = require('../database/db');
 
 // Middleware para verificar si el usuario es administrador
 const checkAdmin = (req, res, next) => {
@@ -24,7 +25,7 @@ router.get('/schedules', async (req, res) => {
     try {
         // 1. Encontrar la ruta usando ILIKE
         const routeQuery = `SELECT id FROM routes WHERE origin ILIKE $1 AND destination ILIKE $2`;
-        const routeResult = await req.db.query(routeQuery, [origin, destination]);
+        const routeResult = await pool.query(routeQuery, [origin, destination]);
 
         if (routeResult.rows.length === 0) {
             return res.json([]); // No se encontró la ruta
@@ -45,7 +46,7 @@ router.get('/schedules', async (req, res) => {
             ORDER BY s.departure_time;
         `;
         const queryParams = [matchedRoute.id, dayOfWeek];
-        const schedulesResult = await req.db.query(schedulesQuery, queryParams);
+        const schedulesResult = await pool.query(schedulesQuery, queryParams);
 
         if (schedulesResult.rows.length === 0) {
             return res.json([]);
@@ -53,7 +54,7 @@ router.get('/schedules', async (req, res) => {
 
         // 3. Calcular disponibilidad
         const schedulesWithAvailability = await Promise.all(schedulesResult.rows.map(async (schedule) => {
-            const reservationsResult = await req.db.query(
+            const reservationsResult = await pool.query(
                 `SELECT reservation_type, seats_reserved FROM reservations WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')`,
                 [schedule.schedule_id, date]
             );
@@ -97,16 +98,16 @@ router.get('/seats/:schedule_id', async (req, res) => {
     }
 
     try {
-        const scheduleRes = await req.db.query('SELECT bus_id FROM schedules WHERE id = $1', [schedule_id]);
+        const scheduleRes = await pool.query('SELECT bus_id FROM schedules WHERE id = $1', [schedule_id]);
         if (scheduleRes.rowCount === 0) {
             return res.status(404).json({ error: 'Horario no encontrado' });
         }
         const busId = scheduleRes.rows[0].bus_id;
 
-        const seatsRes = await req.db.query('SELECT id, seat_number, seat_type, price_modifier FROM seats WHERE bus_id = $1 ORDER BY id', [busId]);
+        const seatsRes = await pool.query('SELECT id, seat_number, seat_type, price_modifier FROM seats WHERE bus_id = $1 ORDER BY id', [busId]);
         const allSeats = seatsRes.rows;
 
-        const reservationsRes = await req.db.query(
+        const reservationsRes = await pool.query(
             `SELECT reservation_type, seats_reserved FROM reservations WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')`,
             [schedule_id, date]
         );
@@ -140,7 +141,7 @@ router.get('/seats/:schedule_id', async (req, res) => {
 // Obtener todos los autobuses
 router.get('/', async (req, res) => {
     try {
-        const result = await req.db.query('SELECT * FROM buses ORDER BY id');
+        const result = await pool.query('SELECT * FROM buses ORDER BY id');
         res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener autobuses:', err.message);
@@ -152,7 +153,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const result = await req.db.query('SELECT * FROM buses WHERE id = $1', [id]);
+        const result = await pool.query('SELECT * FROM buses WHERE id = $1', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Autobús no encontrado' });
         }
@@ -169,7 +170,7 @@ router.post('/', checkAdmin, async (req, res) => {
     if (!bus_number || !type || !capacity) {
         return res.status(400).json({ error: 'Número de autobús, tipo y capacidad son requeridos' });
     }
-    const client = await req.db.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const existingBus = await client.query('SELECT id FROM buses WHERE bus_number = $1', [bus_number]);
@@ -199,7 +200,7 @@ router.post('/', checkAdmin, async (req, res) => {
 // Actualizar un autobús
 router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const client = await req.db.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const existingBusResult = await client.query('SELECT * FROM buses WHERE id = $1', [id]);
@@ -244,7 +245,7 @@ router.put('/:id', checkAdmin, async (req, res) => {
 // Eliminar un autobús
 router.delete('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const client = await req.db.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const reservationCheck = await client.query(

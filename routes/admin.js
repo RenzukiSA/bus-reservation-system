@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
+const pool = require('../database/db');
 
 // Middleware para verificar si el usuario es administrador
 const checkAdmin = (req, res, next) => {
@@ -16,9 +17,17 @@ const checkAdmin = (req, res, next) => {
 // Login
 router.post('/login', async (req, res) => {
     const { password } = req.body;
+
+    // Validar que la contraseña del administrador esté configurada en el servidor
+    if (!process.env.ADMIN_PASSWORD) {
+        console.error('La contraseña de administrador no está configurada en las variables de entorno.');
+        return res.status(500).json({ success: false, error: 'Error de configuración del servidor.' });
+    }
+
     try {
-        const passwordMatch = await bcrypt.compare(password, req.adminPasswordHash);
-        if (passwordMatch) {
+        // Comparar la contraseña proporcionada con la variable de entorno
+        // Nota: Se asume que ADMIN_PASSWORD es texto plano. Si fuera un hash, usaríamos bcrypt.compare.
+        if (password === process.env.ADMIN_PASSWORD) {
             req.session.isAdmin = true;
             res.json({ success: true });
         } else {
@@ -78,7 +87,7 @@ router.get('/reservations', checkAdmin, async (req, res) => {
     query += ' ORDER BY r.created_at DESC';
 
     try {
-        const result = await req.db.query(query, params);
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener las reservaciones de admin:', err);
@@ -89,8 +98,6 @@ router.get('/reservations', checkAdmin, async (req, res) => {
 // Get dashboard statistics
 router.get('/dashboard', checkAdmin, async (req, res) => {
     try {
-        const db = req.db;
-
         const statusQuery = `SELECT status, COUNT(*) as count FROM reservations GROUP BY status`;
         const revenueQuery = `
             SELECT 
@@ -114,9 +121,9 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
         `;
 
         const [statusResult, revenueResult, popularRoutesResult] = await Promise.all([
-            db.query(statusQuery),
-            db.query(revenueQuery),
-            db.query(popularRoutesQuery)
+            pool.query(statusQuery),
+            pool.query(revenueQuery),
+            pool.query(popularRoutesQuery)
         ]);
 
         res.json({
@@ -131,13 +138,10 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
     }
 });
 
-
-
 // Get all schedules for admin
 router.get('/schedules', checkAdmin, async (req, res) => {
-    const db = req.db;
     try {
-        const result = await db.query(`
+        const result = await pool.query(`
             SELECT 
                 s.id,
                 s.route_id,
@@ -164,9 +168,8 @@ router.get('/schedules', checkAdmin, async (req, res) => {
 // Get specific schedule for admin
 router.get('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const db = req.db;
     try {
-        const result = await db.query(`
+        const result = await pool.query(`
             SELECT 
                 s.id,
                 s.route_id,
@@ -199,22 +202,21 @@ router.post('/schedules', checkAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
     
-    const db = req.db;
     try {
         // Verificar que la ruta existe
-        const routeCheck = await db.query('SELECT id FROM routes WHERE id = $1', [route_id]);
+        const routeCheck = await pool.query('SELECT id FROM routes WHERE id = $1', [route_id]);
         if (routeCheck.rows.length === 0) {
             return res.status(400).json({ error: 'La ruta especificada no existe' });
         }
         
         // Verificar que el autobús existe y está activo
-        const busCheck = await db.query('SELECT id FROM buses WHERE id = $1 AND status = $2', [bus_id, 'active']);
+        const busCheck = await pool.query('SELECT id FROM buses WHERE id = $1 AND status = $2', [bus_id, 'active']);
         if (busCheck.rows.length === 0) {
             return res.status(400).json({ error: 'El autobús especificado no existe o no está activo' });
         }
         
         // Crear el horario
-        const result = await db.query(`
+        const result = await pool.query(`
             INSERT INTO schedules (route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier, status) 
             VALUES ($1, $2, $3, $4, $5, $6, $7) 
             RETURNING *
@@ -230,7 +232,7 @@ router.post('/schedules', checkAdmin, async (req, res) => {
 // Update schedule
 router.put('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const client = await req.db.connect();
+    const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
@@ -271,7 +273,7 @@ router.put('/schedules/:id', checkAdmin, async (req, res) => {
 // Delete schedule
 router.delete('/schedules/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
-    const client = await req.db.connect();
+    const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
@@ -312,9 +314,8 @@ router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Estado inválido' });
     }
     
-    const db = req.db;
     try {
-        const result = await db.query(
+        const result = await pool.query(
             'UPDATE reservations SET status = $1 WHERE id = $2 RETURNING *',
             [status, id]
         );
@@ -330,8 +331,4 @@ router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
     }
 });
 
-
-
-
 module.exports = router;
-
