@@ -1,5 +1,23 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // --- Responsive Sidebar --- 
+    // --- Check authentication and initialize --- 
+    const isAdmin = await checkAuth();
+    if (!isAdmin) {
+        // If not admin, show a login modal instead of redirecting
+        showLoginModal();
+    } else {
+        // If admin, initialize the panel
+        initializePanel();
+    }
+});
+
+function initializePanel() {
+    document.body.classList.add('logged-in'); // Add class to show main content
+    setupNavigation();
+    loadSection('dashboard'); // Load dashboard by default
+    setupResponsiveSidebar();
+}
+
+function setupResponsiveSidebar() {
     const sidebarToggle = document.querySelector('.sidebar-toggle');
     const sidebar = document.querySelector('.sidebar');
 
@@ -8,26 +26,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             sidebar.classList.toggle('active');
         });
 
-        // Close sidebar when clicking outside on mobile
         document.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(e.target) && 
-                !sidebarToggle.contains(e.target) && 
-                sidebar.classList.contains('active')) {
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !sidebarToggle.contains(e.target) && sidebar.classList.contains('active')) {
                 sidebar.classList.remove('active');
             }
         });
     }
-    const isAdmin = await checkAuth();
-    if (!isAdmin) {
-        window.location.href = '/';
-        return;
-    }
-    setupNavigation();
-    loadDashboard(); 
-});
+}
 
-// --- FUNCIONES DE AUTENTICACIÓN Y NAVEGACIÓN ---
+// --- AUTHENTICATION & NAVIGATION --- 
 
 async function checkAuth() {
     try {
@@ -40,12 +47,55 @@ async function checkAuth() {
     }
 }
 
+function showLoginModal() {
+    const modalHTML = `
+        <div id="login-modal" class="auth-modal">
+            <div class="auth-modal-content">
+                <h3><i class="fas fa-user-shield"></i> Acceso de Administrador</h3>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="password">Contraseña</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                    <p id="login-error" class="error-message"></p>
+                </form>
+                 <a href="/" class="back-link">Volver a la página principal</a>
+            </div>
+        </div>
+    `;
+    document.body.innerHTML = modalHTML;
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.textContent = '';
+
+    try {
+        const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Contraseña incorrecta');
+        
+        // On success, reload the page to initialize the panel
+        window.location.reload();
+
+    } catch (error) {
+        errorEl.textContent = error.message;
+    }
+}
+
 function setupNavigation() {
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => {
+    document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            navLinks.forEach(l => l.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
             const targetId = link.getAttribute('href').substring(1);
             loadSection(targetId);
@@ -54,95 +104,106 @@ function setupNavigation() {
     document.getElementById('logout-btn').addEventListener('click', logout);
 }
 
+async function logout(e) {
+    e.preventDefault();
+    try {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        window.location.href = '/';
+    } catch (error) {
+        showNotification('Error al cerrar sesión.', 'error');
+    }
+}
+
+// --- DYNAMIC CONTENT LOADING --- 
+
 function loadSection(sectionId) {
     const contentTitle = document.getElementById('content-title');
-    const pageTitles = {
+    const titles = {
         dashboard: 'Dashboard',
         reservations: 'Gestionar Reservaciones',
         routes: 'Gestionar Rutas',
         buses: 'Gestionar Autobuses',
         schedules: 'Gestionar Horarios'
     };
-    contentTitle.textContent = pageTitles[sectionId] || 'Panel';
+    contentTitle.textContent = titles[sectionId] || 'Panel';
 
     switch (sectionId) {
         case 'dashboard': loadDashboard(); break;
         case 'reservations': loadReservations(); break;
         case 'routes': loadRoutesAdmin(); break;
-        case 'buses': loadBuses(); break;
-        case 'schedules': loadSchedules(); break;
+        case 'buses': loadBusesAdmin(); break;
+        case 'schedules': loadSchedulesAdmin(); break;
     }
 }
 
-async function logout(event) {
-    event.preventDefault();
-    try {
-        await fetch('/api/admin/logout', { method: 'POST' });
-        window.location.href = '/';
-    } catch (error) {
-        console.error('Error al cerrar sesión:', error);
-        alert('No se pudo cerrar la sesión.');
-    }
-}
-
-// --- FUNCIONES PARA CARGAR CONTENIDO DE SECCIONES ---
+// --- DASHBOARD SECTION --- 
 
 async function loadDashboard() {
     const content = document.getElementById('admin-content');
-    content.innerHTML = '<p>Cargando estadísticas...</p>';
+    content.innerHTML = getLoaderHTML('Cargando estadísticas...');
     try {
         const response = await fetch('/api/admin/dashboard');
-        if (!response.ok) throw new Error('No se pudieron cargar los datos.');
+        if (!response.ok) throw new Error('No se pudieron cargar los datos del dashboard.');
         const data = await response.json();
+        
+        const confirmed = data.reservations_by_status.find(s => s.status === 'confirmed')?.count || 0;
+        const pending = data.reservations_by_status.find(s => s.status === 'pending')?.count || 0;
+        const total = confirmed + pending + (data.reservations_by_status.find(s => s.status === 'cancelled')?.count || 0);
+        const revenue = data.monthly_revenue[0]?.revenue || '0.00';
+
         content.innerHTML = `
             <div class="dashboard-grid">
-                <div class="stat-card"><h3>Reservas Confirmadas</h3><p>${data.reservations_by_status.find(s => s.status === 'confirmed')?.count || 0}</p></div>
-                <div class="stat-card"><h3>Reservas Pendientes</h3><p>${data.reservations_by_status.find(s => s.status === 'pending')?.count || 0}</p></div>
-                <div class="stat-card"><h3>Ingresos del Mes (Ejemplo)</h3><p>$${data.monthly_revenue[0]?.revenue || '0.00'}</p></div>
+                <div class="stat-card"><h3><i class="fas fa-ticket-alt"></i> Total Reservas</h3><p>${total}</p></div>
+                <div class="stat-card"><h3><i class="fas fa-check-circle"></i> Confirmadas</h3><p>${confirmed}</p></div>
+                <div class="stat-card"><h3><i class="fas fa-clock"></i> Pendientes</h3><p>${pending}</p></div>
+                <div class="stat-card"><h3><i class="fas fa-dollar-sign"></i> Ingresos (Mes)</h3><p>$${parseFloat(revenue).toFixed(2)}</p></div>
             </div>`;
     } catch (error) {
-        content.innerHTML = `<p class="error-message">${error.message}</p>`;
+        content.innerHTML = getErrorHTML(error.message);
     }
 }
 
+// --- RESERVATIONS SECTION ---
+
 async function loadReservations() {
     const content = document.getElementById('admin-content');
-    content.innerHTML = '<p>Cargando reservaciones...</p>';
+    content.innerHTML = getLoaderHTML('Cargando reservaciones...');
     try {
         const response = await fetch('/api/admin/reservations');
         if (!response.ok) throw new Error('No se pudieron cargar las reservaciones.');
         const reservations = await response.json();
         let tableHTML = `
-            <table class="admin-table">
-                <thead><tr><th>ID</th><th>Cliente</th><th>Ruta</th><th>Fecha Viaje</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
-                <tbody>`;
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead><tr><th>ID</th><th>Cliente</th><th>Ruta</th><th>Fecha Viaje</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+                    <tbody>`;
         if (reservations.length === 0) {
-            tableHTML += '<tr><td colspan="7" style="text-align: center;">No hay reservaciones.</td></tr>';
+            tableHTML += '<tr><td colspan="7">No hay reservaciones.</td></tr>';
         } else {
             reservations.forEach(res => {
                 tableHTML += `
                     <tr>
-                        <td>${res.id.substring(0, 8)}...</td>
+                        <td><code>${res.id.substring(0, 8)}...</code></td>
                         <td>${res.customer_name}</td>
                         <td>${res.origin} → ${res.destination}</td>
-                        <td>${new Date(res.reservation_date).toLocaleDateString()}</td>
+                        <td>${new Date(res.reservation_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}</td>
                         <td>$${res.total_price}</td>
-                        <td><span class="status status-${res.status}">${res.status}</span></td>
-                        <td>
-                            ${res.status === 'pending' ? `<button class="btn-confirm" onclick="handleUpdateReservationStatus('${res.id}', 'confirmed')">Confirmar</button>` : ''}
-                            ${res.status !== 'cancelled' ? `<button class="btn-cancel" onclick="handleUpdateReservationStatus('${res.id}', 'cancelled')">Cancelar</button>` : ''}
+                        <td><span class="status-badge status-${res.status}">${res.status}</span></td>
+                        <td class="actions">
+                            ${res.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="updateReservationStatus('${res.id}', 'confirmed')">Confirmar</button>` : ''}
+                            ${res.status !== 'cancelled' && res.status !== 'expired' ? `<button class="btn btn-sm btn-danger" onclick="updateReservationStatus('${res.id}', 'cancelled')">Cancelar</button>` : ''}
                         </td>
                     </tr>`;
             });
         }
-        tableHTML += '</tbody></table>';
+        tableHTML += '</tbody></table></div>';
         content.innerHTML = tableHTML;
     } catch (error) {
-        content.innerHTML = `<p class="error-message">${error.message}</p>`;
+        content.innerHTML = getErrorHTML(error.message);
     }
 }
 
-async function handleUpdateReservationStatus(id, status) {
+async function updateReservationStatus(id, status) {
     const action = status === 'confirmed' ? 'confirmar' : 'cancelar';
     if (!confirm(`¿Estás seguro de que quieres ${action} esta reservación?`)) return;
 
@@ -156,557 +217,264 @@ async function handleUpdateReservationStatus(id, status) {
             const err = await response.json();
             throw new Error(err.error || 'No se pudo actualizar la reservación.');
         }
-        loadReservations(); // Recargar la lista
+        showNotification('Reservación actualizada.', 'success');
+        loadReservations(); // Refresh list
     } catch (error) {
-        alert(`Error: ${error.message}`);
+        showNotification(error.message, 'error');
     }
 }
 
-async function loadRoutesAdmin() {
+// --- ROUTES, BUSES, SCHEDULES (Generic CRUD functions) ---
+
+const SECTIONS_CONFIG = {
+    routes: {
+        plural: 'Rutas',
+        singular: 'Ruta',
+        endpoint: '/api/routes',
+        columns: ['Origen', 'Destino', 'Distancia (km)', 'Precio Base'],
+        fields: {
+            origin: { label: 'Origen', type: 'text', required: true },
+            destination: { label: 'Destino', type: 'text', required: true },
+            distance_km: { label: 'Distancia (km)', type: 'number' },
+            base_price: { label: 'Precio Base', type: 'number', step: '0.01', required: true },
+        },
+        renderRow: (item) => `
+            <td>${item.origin}</td>
+            <td>${item.destination}</td>
+            <td>${item.distance_km || 'N/A'}</td>
+            <td>$${item.base_price}</td>`
+    },
+    buses: {
+        plural: 'Autobuses',
+        singular: 'Autobús',
+        endpoint: '/api/buses',
+        columns: ['Número', 'Tipo', 'Capacidad', 'Estado'],
+        fields: {
+            bus_number: { label: 'Número de Bus', type: 'text', required: true },
+            type: { label: 'Tipo', type: 'select', options: { economico: 'Económico', primera_clase: 'Primera Clase', ejecutivo: 'Ejecutivo' }, required: true },
+            capacity: { label: 'Capacidad', type: 'number', required: true },
+            status: { label: 'Estado', type: 'select', options: { active: 'Activo', inactive: 'Inactivo', maintenance: 'Mantenimiento' }, required: true },
+        },
+        renderRow: (item) => `
+            <td>${item.bus_number}</td>
+            <td>${item.type.replace('_', ' ')}</td>
+            <td>${item.capacity}</td>
+            <td><span class="status-badge status-${item.status}">${item.status}</span></td>`
+    },
+    schedules: {
+        plural: 'Horarios',
+        singular: 'Horario',
+        endpoint: '/api/admin/schedules',
+        columns: ['Ruta', 'Autobús', 'Salida', 'Llegada', 'Días', 'Estado'],
+        fields: {
+            route_id: { label: 'Ruta', type: 'select', required: true, source: 'routes' },
+            bus_id: { label: 'Autobús', type: 'select', required: true, source: 'buses' },
+            departure_time: { label: 'Hora de Salida', type: 'time', required: true },
+            arrival_time: { label: 'Hora de Llegada', type: 'time', required: true },
+            days_of_week: { label: 'Días de Semana', type: 'multicheck', options: { monday: 'Lu', tuesday: 'Ma', wednesday: 'Mi', thursday: 'Ju', friday: 'Vi', saturday: 'Sá', sunday: 'Do', daily: 'Diario' }, required: true },
+            price_multiplier: { label: 'Multiplicador Precio', type: 'number', step: '0.1', defaultValue: 1.0 },
+            status: { label: 'Estado', type: 'select', options: { active: 'Activo', inactive: 'Inactivo' }, required: true },
+        },
+        renderRow: (item) => `
+            <td>${item.origin} → ${item.destination}</td>
+            <td>${item.bus_number}</td>
+            <td>${item.departure_time}</td>
+            <td>${item.arrival_time}</td>
+            <td>${(Array.isArray(item.days_of_week) ? item.days_of_week : []).join(', ')}</td>
+            <td><span class="status-badge status-${item.status}">${item.status}</span></td>`
+    }
+};
+
+async function loadGenericAdminSection(sectionKey) {
+    const config = SECTIONS_CONFIG[sectionKey];
     const content = document.getElementById('admin-content');
-    content.innerHTML = '<p>Cargando rutas...</p>';
+    content.innerHTML = getLoaderHTML(`Cargando ${config.plural}...`);
+
     try {
-        const response = await fetch('/api/routes');
-        if (!response.ok) throw new Error('No se pudieron cargar las rutas.');
-        const routes = await response.json();
-        
-        let contentHTML = `
-            <div class="admin-form">
-                <h3>Añadir Nueva Ruta</h3>
-                <form id="add-route-form">
-                    <div class="form-group"><label for="origin">Origen</label><input type="text" id="origin" required></div>
-                    <div class="form-group"><label for="destination">Destino</label><input type="text" id="destination" required></div>
-                    <div class="form-group"><label for="distance_km">Distancia (km)</label><input type="number" id="distance_km" min="1" placeholder="100" required></div>
-                    <div class="form-group"><label for="base_price">Precio Base ($)</label><input type="number" id="base_price" min="0" step="0.01" placeholder="200.00" required></div>
-                    <button type="submit">Añadir Ruta</button>
-                </form>
-            </div>
-            <table class="admin-table">
-                <thead><tr><th>Origen</th><th>Destino</th><th>Distancia (km)</th><th>Precio Base</th><th>Acciones</th></tr></thead>
-                <tbody>`;
-        
-        if (routes.length === 0) {
-            contentHTML += '<tr><td colspan="5" style="text-align: center;">No hay rutas definidas.</td></tr>';
-        } else {
-            routes.forEach(route => {
-                contentHTML += `
-                    <tr data-id="${route.id}">
-                        <td data-label="origin">${route.origin}</td>
-                        <td data-label="destination">${route.destination}</td>
-                        <td data-label="distance">${route.distance_km || 'N/A'} km</td>
-                        <td data-label="price">$${route.base_price || 'N/A'}</td>
-                        <td>
-                            <button class="btn btn-secondary" onclick="showEditForm(${route.id})"><i class="fas fa-edit"></i> Editar</button>
-                            <button class="btn btn-danger" onclick="handleDeleteRoute(${route.id})"><i class="fas fa-trash"></i> Eliminar</button>
-                        </td>
-                    </tr>`;
-            });
-        }
-        contentHTML += '</tbody></table>';
-        content.innerHTML = contentHTML;
+        const response = await fetch(config.endpoint);
+        if (!response.ok) throw new Error(`No se pudieron cargar los ${config.plural}.`);
+        const items = await response.json();
 
-        document.getElementById('add-route-form').addEventListener('submit', handleCreateRoute);
-    } catch (error) {
-        content.innerHTML = `<p class="error-message">${error.message}</p>`;
-    }
-}
-
-async function handleCreateRoute(event) {
-    event.preventDefault();
-    const origin = document.getElementById('origin').value;
-    const destination = document.getElementById('destination').value;
-    const distance_km = document.getElementById('distance_km').value;
-    const base_price = document.getElementById('base_price').value;
-    try {
-        const response = await fetch('/api/routes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ origin, destination, distance_km: parseInt(distance_km), base_price: parseFloat(base_price) })
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'No se pudo crear la ruta.');
-        }
-        loadRoutesAdmin(); // Recargar la lista de rutas
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-async function handleDeleteRoute(id) {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta ruta?')) return;
-    try {
-        const response = await fetch(`/api/routes/${id}`, { method: 'DELETE' });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'No se pudo eliminar la ruta.');
-        }
-        loadRoutesAdmin();
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-function showEditForm(id) {
-    const row = document.querySelector(`tr[data-id='${id}']`);
-    const origin = row.querySelector("td[data-label='origin']").textContent;
-    const destination = row.querySelector("td[data-label='destination']").textContent;
-
-    row.innerHTML = `
-        <td><input type="text" value="${origin}" id="edit-origin-${id}"></td>
-        <td><input type="text" value="${destination}" id="edit-destination-${id}"></td>
-        <td>
-            <button class="btn-save" onclick="handleUpdateRoute(${id})">Guardar</button>
-            <button class="btn-cancel" onclick="loadRoutesAdmin()">Cancelar</button>
-        </td>`;
-}
-
-async function handleUpdateRoute(id) {
-    const origin = document.getElementById(`edit-origin-${id}`).value;
-    const destination = document.getElementById(`edit-destination-${id}`).value;
-    // NOTE: This function is simplified and does not update distance/price. 
-    // A full modal form would be better for this.
-    try {
-        const response = await fetch(`/api/routes/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ origin, destination })
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'No se pudo actualizar la ruta.');
-        }
-        loadRoutesAdmin();
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-async function loadBuses() {
-    const content = document.getElementById('admin-content');
-    content.innerHTML = '<p>Cargando autobuses...</p>';
-    
-    try {
-        const response = await fetch('/api/buses');
-        if (!response.ok) throw new Error('No se pudieron cargar los autobuses.');
-        const buses = await response.json();
-        
         let tableHTML = `
             <div class="section-header">
-                <button class="btn btn-primary" onclick="showAddBusForm()">
-                    <i class="fas fa-plus"></i> Agregar Autobús
-                </button>
+                <h3>${config.plural}</h3>
+                <button class="btn btn-primary" onclick="showEditModal('${sectionKey}')"><i class="fas fa-plus"></i> Agregar ${config.singular}</button>
             </div>
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Número de Bus</th>
-                        <th>Tipo</th>
-                        <th>Capacidad</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-        
-        buses.forEach(bus => {
-            tableHTML += `
-                <tr>
-                    <td>${bus.id}</td>
-                    <td>${bus.bus_number}</td>
-                    <td>${bus.type || 'N/A'}</td>
-                    <td>${bus.capacity} asientos</td>
-                    <td><span class="status-badge ${bus.status}">${bus.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
-                    <td>
-                        <button class="btn btn-secondary" onclick="editBus(${bus.id})">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
-                        <button class="btn btn-danger" onclick="deleteBus(${bus.id})">
-                            <i class="fas fa-trash"></i> Eliminar
-                        </button>
-                    </td>
-                </tr>`;
-        });
-        
-        tableHTML += `
-                </tbody>
-            </table>
-            
-            <!-- Modal para agregar/editar autobús -->
-            <div id="busModal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <span class="modal-close" onclick="closeBusModal()">&times;</span>
-                    <h3 id="busModalTitle">Agregar Autobús</h3>
-                    <form id="busForm" class="admin-form">
-                        <div class="form-group">
-                            <label for="busNumber">Número de Autobús:</label>
-                            <input type="text" id="busNumber" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="busType">Tipo de Autobús:</label>
-                            <select id="busType" required>
-                                <option value="">Seleccionar tipo</option>
-                                <option value="economico">Económico</option>
-                                <option value="primera_clase">Primera Clase</option>
-                                <option value="ejecutivo">Ejecutivo</option>
-                                <option value="lujo">Lujo</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="busCapacity">Capacidad:</label>
-                            <input type="number" id="busCapacity" min="1" max="60" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="busStatus">Estado:</label>
-                            <select id="busStatus" required>
-                                <option value="active">Activo</option>
-                                <option value="inactive">Inactivo</option>
-                            </select>
-                        </div>
-                        <button type="submit">Guardar</button>
-                    </form>
-                </div>
-            </div>`;
-        
-        content.innerHTML = tableHTML;
-        setupBusFormHandlers();
-        
-    } catch (error) {
-        content.innerHTML = `<p class="error-message">${error.message}</p>`;
-    }
-}
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead><tr><th>ID</th>${config.columns.map(c => `<th>${c}</th>`).join('')}<th>Acciones</th></tr></thead>
+                    <tbody>`;
 
-function showAddBusForm() {
-    document.getElementById('busModalTitle').textContent = 'Agregar Autobús';
-    document.getElementById('busForm').reset();
-    document.getElementById('busForm').removeAttribute('data-bus-id');
-    document.getElementById('busModal').style.display = 'flex';
-}
-
-async function editBus(busId) {
-    try {
-        const response = await fetch(`/api/buses/${busId}`);
-        if (!response.ok) throw new Error('No se pudo cargar el autobús.');
-        const bus = await response.json();
-        
-        document.getElementById('busModalTitle').textContent = 'Editar Autobús';
-        document.getElementById('busNumber').value = bus.bus_number;
-        document.getElementById('busType').value = bus.type || '';
-        document.getElementById('busCapacity').value = bus.capacity;
-        document.getElementById('busStatus').value = bus.status;
-        document.getElementById('busForm').setAttribute('data-bus-id', busId);
-        document.getElementById('busModal').style.display = 'flex';
-        
-    } catch (error) {
-        alert('Error al cargar el autobús: ' + error.message);
-    }
-}
-
-async function deleteBus(busId) {
-    if (!confirm('¿Estás seguro de que deseas eliminar este autobús?')) return;
-    
-    try {
-        const response = await fetch(`/api/buses/${busId}`, { method: 'DELETE' });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'No se pudo eliminar el autobús.');
-        }
-        loadBuses(); // Recargar la lista
-        alert('Autobús eliminado exitosamente.');
-    } catch (error) {
-        alert('Error al eliminar el autobús: ' + error.message);
-    }
-}
-
-function closeBusModal() {
-    document.getElementById('busModal').style.display = 'none';
-}
-
-function setupBusFormHandlers() {
-    const form = document.getElementById('busForm');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const busData = {
-            bus_number: document.getElementById('busNumber').value,
-            type: document.getElementById('busType').value,
-            capacity: parseInt(document.getElementById('busCapacity').value),
-            status: document.getElementById('busStatus').value
-        };
-        
-        const busId = form.getAttribute('data-bus-id');
-        const isEdit = !!busId;
-        
-        try {
-            const response = await fetch(
-                isEdit ? `/api/buses/${busId}` : '/api/buses',
-                {
-                    method: isEdit ? 'PUT' : 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(busData)
-                }
-            );
-            
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'No se pudo guardar el autobús.');
-            }
-            
-            closeBusModal();
-            loadBuses(); // Recargar la lista
-            alert(isEdit ? 'Autobús actualizado exitosamente.' : 'Autobús agregado exitosamente.');
-            
-        } catch (error) {
-            alert('Error al guardar el autobús: ' + error.message);
-        }
-    });
-}
-
-// --- FUNCIONES PARA GESTIÓN DE HORARIOS ---
-
-async function loadSchedules() {
-    const content = document.getElementById('admin-content');
-    content.innerHTML = '<p>Cargando horarios...</p>';
-    
-    try {
-        // Cargar datos necesarios para los formularios
-        const [schedulesRes, routesRes, busesRes] = await Promise.all([
-            fetch('/api/admin/schedules'),
-            fetch('/api/routes'),
-            fetch('/api/buses')
-        ]);
-        
-        if (!schedulesRes.ok || !routesRes.ok || !busesRes.ok) {
-            throw new Error('No se pudieron cargar los datos necesarios.');
-        }
-        
-        const schedules = await schedulesRes.json();
-        const routes = await routesRes.json();
-        const buses = await busesRes.json();
-        
-        let tableHTML = `
-            <div class="section-header">
-                <button class="btn btn-primary" onclick="showAddScheduleForm()">
-                    <i class="fas fa-plus"></i> Agregar Horario
-                </button>
-            </div>
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Ruta</th>
-                        <th>Autobús</th>
-                        <th>Hora Salida</th>
-                        <th>Hora Llegada</th>
-                        <th>Multiplicador</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-        
-        if (schedules.length === 0) {
-            tableHTML += '<tr><td colspan="8" style="text-align: center;">No hay horarios definidos.</td></tr>';
+        if (items.length === 0) {
+            tableHTML += `<tr><td colspan="${config.columns.length + 2}">No hay ${config.plural}.</td></tr>`;
         } else {
-            schedules.forEach(schedule => {
+            items.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td>${schedule.id}</td>
-                        <td>${schedule.origin} → ${schedule.destination}</td>
-                        <td>Bus ${schedule.bus_number}</td>
-                        <td>${schedule.departure_time}</td>
-                        <td>${schedule.arrival_time}</td>
-                        <td>x${schedule.price_multiplier}</td>
-                        <td><span class="status-badge ${schedule.status}">${schedule.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
-                        <td>
-                            <button class="btn btn-secondary" onclick="editSchedule(${schedule.id})">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-danger" onclick="deleteSchedule(${schedule.id})">
-                                <i class="fas fa-trash"></i> Eliminar
-                            </button>
+                        <td>${item.id}</td>
+                        ${config.renderRow(item)}
+                        <td class="actions">
+                            <button class="btn btn-sm btn-secondary" onclick="showEditModal('${sectionKey}', ${item.id})">Editar</button>
+                            <button class="btn btn-sm btn-danger" onclick="handleDeleteItem('${sectionKey}', ${item.id})">Eliminar</button>
                         </td>
                     </tr>`;
             });
         }
-        
-        tableHTML += `
-                </tbody>
-            </table>
-            
-            <!-- Modal para agregar/editar horario -->
-            <div id="scheduleModal" class="modal" style="display: none;">
-                <div class="modal-content">
-                    <span class="modal-close" onclick="closeScheduleModal()">&times;</span>
-                    <h3 id="scheduleModalTitle">Agregar Horario</h3>
-                    <form id="scheduleForm" class="admin-form">
-                        <div class="form-group">
-                            <label for="scheduleRoute">Ruta:</label>
-                            <select id="scheduleRoute" required>
-                                <option value="">Seleccionar ruta</option>
-                                ${routes.map(route => `<option value="${route.id}">${route.origin} → ${route.destination}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="scheduleBus">Autobús:</label>
-                            <select id="scheduleBus" required>
-                                <option value="">Seleccionar autobús</option>
-                                ${buses.filter(bus => bus.status === 'active').map(bus => `<option value="${bus.id}">Bus ${bus.bus_number} (${bus.capacity} asientos)</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="departureTime">Hora de Salida:</label>
-                            <input type="time" id="departureTime" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="arrivalTime">Hora de Llegada:</label>
-                            <input type="time" id="arrivalTime" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="scheduleDays">Días de la Semana:</label>
-                            <div class="checkbox-group">
-                                <label><input type="checkbox" value="monday"> Lunes</label>
-                                <label><input type="checkbox" value="tuesday"> Martes</label>
-                                <label><input type="checkbox" value="wednesday"> Miércoles</label>
-                                <label><input type="checkbox" value="thursday"> Jueves</label>
-                                <label><input type="checkbox" value="friday"> Viernes</label>
-                                <label><input type="checkbox" value="saturday"> Sábado</label>
-                                <label><input type="checkbox" value="sunday"> Domingo</label>
-                                <label><input type="checkbox" value="daily"> Diario</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="priceMultiplier">Multiplicador de Precio:</label>
-                            <input type="number" id="priceMultiplier" min="0.1" max="3.0" step="0.1" value="1.0" required>
-                            <small>1.0 = precio normal, 1.5 = 50% más caro</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="scheduleStatus">Estado:</label>
-                            <select id="scheduleStatus" required>
-                                <option value="active">Activo</option>
-                                <option value="inactive">Inactivo</option>
-                            </select>
-                        </div>
-                        <button type="submit">Guardar</button>
-                    </form>
-                </div>
-            </div>`;
-        
+        tableHTML += '</tbody></table></div>';
         content.innerHTML = tableHTML;
-        setupScheduleFormHandlers();
-        
     } catch (error) {
-        content.innerHTML = `<p class="error-message">${error.message}</p>`;
+        content.innerHTML = getErrorHTML(error.message);
     }
 }
 
-function showAddScheduleForm() {
-    document.getElementById('scheduleModalTitle').textContent = 'Agregar Horario';
-    document.getElementById('scheduleForm').reset();
-    document.getElementById('scheduleForm').removeAttribute('data-schedule-id');
-    document.getElementById('scheduleModal').style.display = 'flex';
+async function showEditModal(sectionKey, itemId = null) {
+    const config = SECTIONS_CONFIG[sectionKey];
+    const isEdit = itemId !== null;
+    const title = isEdit ? `Editar ${config.singular}` : `Agregar ${config.singular}`;
+
+    let item = {};
+    if (isEdit) {
+        try {
+            const response = await fetch(`${config.endpoint}/${itemId}`);
+            if (!response.ok) throw new Error('No se pudo cargar el item.');
+            item = await response.json();
+        } catch (error) {
+            showNotification(error.message, 'error');
+            return;
+        }
+    }
+
+    let formFieldsHTML = '';
+    for (const [key, field] of Object.entries(config.fields)) {
+        const value = item[key] || field.defaultValue || '';
+        formFieldsHTML += '<div class="form-group">';
+        formFieldsHTML += `<label for="field-${key}">${field.label}</label>`;
+        if (field.type === 'select') {
+            let options = field.options || {};
+            if (field.source) { // Dynamically load options
+                try {
+                    const res = await fetch(SECTIONS_CONFIG[field.source].endpoint);
+                    const sourceItems = await res.json();
+                    if (field.source === 'routes') options = sourceItems.reduce((acc, i) => ({ ...acc, [i.id]: `${i.origin} → ${i.destination}` }), {});
+                    if (field.source === 'buses') options = sourceItems.reduce((acc, i) => ({ ...acc, [i.id]: `${i.bus_number} (${i.capacity} asientos)` }), {});
+                } catch { /* ignore */ }
+            }
+            formFieldsHTML += `<select id="field-${key}" ${field.required ? 'required' : ''}>`;
+            formFieldsHTML += '<option value="">Seleccionar...</option>';
+            for (const [optValue, optLabel] of Object.entries(options)) {
+                formFieldsHTML += `<option value="${optValue}" ${String(optValue) === String(value) ? 'selected' : ''}>${optLabel}</option>`;
+            }
+            formFieldsHTML += '</select>';
+        } else if (field.type === 'multicheck') {
+            formFieldsHTML += '<div class="checkbox-group">';
+            const selectedValues = Array.isArray(value) ? value : [];
+            for (const [optValue, optLabel] of Object.entries(field.options)) {
+                formFieldsHTML += `<label><input type="checkbox" name="field-${key}" value="${optValue}" ${selectedValues.includes(optValue) ? 'checked' : ''}> ${optLabel}</label>`;
+            }
+            formFieldsHTML += '</div>';
+        } else {
+            formFieldsHTML += `<input type="${field.type}" id="field-${key}" value="${value}" ${field.required ? 'required' : ''} ${field.step ? `step="${field.step}"` : ''}>`;
+        }
+        formFieldsHTML += '</div>';
+    }
+
+    const modalHTML = `
+        <div id="edit-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>${title}</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <form id="edit-form">
+                    ${formFieldsHTML}
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.getElementById('edit-form').addEventListener('submit', (e) => handleSaveItem(e, sectionKey, itemId));
 }
 
-async function editSchedule(scheduleId) {
+async function handleSaveItem(e, sectionKey, itemId) {
+    e.preventDefault();
+    const config = SECTIONS_CONFIG[sectionKey];
+    const isEdit = itemId !== null;
+
+    const body = {};
+    for (const [key, field] of Object.entries(config.fields)) {
+        if (field.type === 'multicheck') {
+            body[key] = Array.from(document.querySelectorAll(`input[name='field-${key}']:checked`)).map(el => el.value);
+        } else {
+            const value = document.getElementById(`field-${key}`).value;
+            body[key] = field.type === 'number' ? parseFloat(value) : value;
+        }
+    }
+
     try {
-        const response = await fetch(`/api/admin/schedules/${scheduleId}`);
-        if (!response.ok) throw new Error('No se pudo cargar el horario.');
-        const schedule = await response.json();
-
-        document.getElementById('scheduleModalTitle').textContent = 'Editar Horario';
-        document.getElementById('scheduleForm').reset();
-
-        document.getElementById('scheduleRoute').value = schedule.route_id;
-        document.getElementById('scheduleBus').value = schedule.bus_id;
-        document.getElementById('departureTime').value = schedule.departure_time;
-        document.getElementById('arrivalTime').value = schedule.arrival_time;
-        document.getElementById('priceMultiplier').value = schedule.price_multiplier;
-        document.getElementById('scheduleStatus').value = schedule.status;
-
-        // Marcar los checkboxes de los días de la semana
-        const days = schedule.days_of_week || [];
-        document.querySelectorAll('#scheduleForm .checkbox-group input').forEach(checkbox => {
-            checkbox.checked = days.includes(checkbox.value);
+        const response = await fetch(isEdit ? `${config.endpoint}/${itemId}` : config.endpoint, {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
         });
-
-        document.getElementById('scheduleForm').setAttribute('data-schedule-id', scheduleId);
-        document.getElementById('scheduleModal').style.display = 'flex';
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudo guardar.');
+        
+        showNotification(`${config.singular} guardada con éxito.`, 'success');
+        closeModal();
+        loadGenericAdminSection(sectionKey);
 
     } catch (error) {
-        alert('Error al cargar el horario: ' + error.message);
+        showNotification(error.message, 'error');
     }
 }
 
-async function deleteSchedule(scheduleId) {
-    if (!confirm('¿Estás seguro de que deseas eliminar este horario?')) return;
-    
+async function handleDeleteItem(sectionKey, itemId) {
+    const config = SECTIONS_CONFIG[sectionKey];
+    if (!confirm(`¿Estás seguro de que quieres eliminar esta ${config.singular.toLowerCase()}?`)) return;
+
     try {
-        const response = await fetch(`/api/admin/schedules/${scheduleId}`, { method: 'DELETE' });
+        const response = await fetch(`${config.endpoint}/${itemId}`, { method: 'DELETE' });
         if (!response.ok) {
             const err = await response.json();
-            throw new Error(err.error || 'No se pudo eliminar el horario.');
+            throw new Error(err.error || 'No se pudo eliminar.');
         }
-        loadSchedules(); // Recargar la lista
-        alert('Horario eliminado exitosamente.');
+        showNotification(`${config.singular} eliminada.`, 'success');
+        loadGenericAdminSection(sectionKey);
     } catch (error) {
-        alert('Error al eliminar el horario: ' + error.message);
+        showNotification(error.message, 'error');
     }
 }
 
-function closeScheduleModal() {
-    document.getElementById('scheduleModal').style.display = 'none';
+// --- Specific Loaders for Generic Sections ---
+function loadRoutesAdmin() { loadGenericAdminSection('routes'); }
+function loadBusesAdmin() { loadGenericAdminSection('buses'); }
+function loadSchedulesAdmin() { loadGenericAdminSection('schedules'); }
+
+// --- UTILITY FUNCTIONS ---
+
+function getLoaderHTML(message) {
+    return `<div class="loader"><i class="fas fa-spinner fa-spin"></i><p>${message}</p></div>`;
 }
 
-function setupScheduleFormHandlers() {
-    const form = document.getElementById('scheduleForm');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const daysOfWeekCheckboxes = document.querySelectorAll('#scheduleForm .checkbox-group input:checked');
-        const days_of_week = Array.from(daysOfWeekCheckboxes).map(cb => cb.value);
-
-        const scheduleData = {
-            route_id: parseInt(document.getElementById('scheduleRoute').value),
-            bus_id: parseInt(document.getElementById('scheduleBus').value),
-            departure_time: document.getElementById('departureTime').value,
-            arrival_time: document.getElementById('arrivalTime').value,
-            days_of_week: days_of_week,
-            price_multiplier: parseFloat(document.getElementById('priceMultiplier').value),
-            status: document.getElementById('scheduleStatus').value
-        };
-        
-        const scheduleId = form.getAttribute('data-schedule-id');
-        const isEdit = !!scheduleId;
-        
-        try {
-            const response = await fetch(
-                isEdit ? `/api/admin/schedules/${scheduleId}` : '/api/admin/schedules',
-                {
-                    method: isEdit ? 'PUT' : 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(scheduleData)
-                }
-            );
-            
-            if (!response.ok) throw new Error('No se pudo guardar el horario.');
-            
-            closeScheduleModal();
-            loadSchedules(); // Recargar la lista
-            alert(isEdit ? 'Horario actualizado exitosamente.' : 'Horario agregado exitosamente.');
-            
-        } catch (error) {
-            alert('Error al guardar el horario: ' + error.message);
-        }
-    });
+function getErrorHTML(message) {
+    return `<div class="error-message"><i class="fas fa-exclamation-triangle"></i><p>${message}</p></div>`;
 }
 
-function renderPlaceholder(sectionName) {
-    const content = document.getElementById('admin-content');
-    content.innerHTML = `
-        <div class="placeholder-section">
-            <h2>Sección de ${sectionName}</h2>
-            <p>Esta sección está lista para ser desarrollada.</p>
-        </div>
-    `;
+function closeModal() {
+    const modal = document.getElementById('edit-modal');
+    if (modal) modal.remove();
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
 }
