@@ -11,7 +11,6 @@ const { initDatabase } = require('./database/init');
 const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
-const locationRoutes = require('./routes/locations');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
@@ -61,7 +60,6 @@ async function startServer() {
         app.use('/api/buses', busRoutes);
         app.use('/api/reservations', reservationRoutes);
         app.use('/api/admin', adminRoutes);
-        app.use('/api/locations', locationRoutes);
         
         // Iniciar el servidor solo si el archivo se ejecuta directamente
         if (require.main === module) {
