@@ -359,7 +359,7 @@ async function showEditModal(sectionKey, itemId = null) {
                     if (field.source === 'buses') options = sourceItems.reduce((acc, i) => ({ ...acc, [i.id]: `${i.bus_number} (${i.capacity} asientos)` }), {});
                 } catch { /* ignore */ }
             }
-            formFieldsHTML += `<select id="field-${key}" ${field.required ? 'required' : ''}>`;
+            formFieldsHTML += `<select id="field-${key}" name="${key}" ${field.required ? 'required' : ''}>`;
             formFieldsHTML += '<option value="">Seleccionar...</option>';
             for (const [optValue, optLabel] of Object.entries(options)) {
                 formFieldsHTML += `<option value="${optValue}" ${String(optValue) === String(value) ? 'selected' : ''}>${optLabel}</option>`;

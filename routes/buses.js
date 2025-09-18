@@ -166,9 +166,13 @@ router.get('/:id', async (req, res) => {
 
 // Crear un nuevo autobús
 router.post('/', checkAdmin, async (req, res) => {
-    const { bus_number, type, capacity, status = 'active' } = req.body;
+    const { bus_number, type, capacity, status } = req.body;
     if (!bus_number || !type || !capacity) {
         return res.status(400).json({ error: 'Número de autobús, tipo y capacidad son requeridos' });
+    }
+    const allowedStatus = ['active', 'inactive', 'maintenance'];
+    if (!status || !allowedStatus.includes(status)) {
+        return res.status(400).json({ error: `Estado no válido. Use uno de: ${allowedStatus.join(', ')}` });
     }
     const client = await pool.connect();
     try {
@@ -200,7 +204,15 @@ router.post('/', checkAdmin, async (req, res) => {
 // Actualizar un autobús
 router.put('/:id', checkAdmin, async (req, res) => {
     const { id } = req.params;
+    const { bus_number, type, capacity, status } = req.body;
     const client = await pool.connect();
+
+    const allowedStatus = ['active', 'inactive', 'maintenance'];
+    if (!status || !allowedStatus.includes(status)) {
+        client.release();
+        return res.status(400).json({ error: `Estado no válido. Use uno de: ${allowedStatus.join(', ')}` });
+    }
+
     try {
         await client.query('BEGIN');
         const existingBusResult = await client.query('SELECT * FROM buses WHERE id = $1', [id]);
