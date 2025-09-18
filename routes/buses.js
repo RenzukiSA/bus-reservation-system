@@ -281,18 +281,16 @@ router.delete('/:id', checkAdmin, async (req, res) => {
 // --- FUNCIONES AUXILIARES ---
 
 async function createSeatsForBus(client, busId, capacity) {
-    const values = [];
-    const placeholders = [];
-    let paramIndex = 1;
+    // Inserta los asientos uno por uno para mayor robustez
     for (let i = 1; i <= capacity; i++) {
+        // Lógica simple para asignar algunos asientos como premium
         const seatType = i <= 4 ? 'premium' : 'standard';
-        const priceModifier = seatType === 'premium' ? 1.2 : 1.0;
-        placeholders.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
-        values.push(busId, i, seatType, priceModifier);
-    }
-    if (values.length > 0) {
-        const query = `INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ${placeholders.join(', ')};`;
-        return client.query(query, values);
+        const priceModifier = seatType === 'premium' ? 1.25 : 1.0;
+        
+        await client.query(
+            'INSERT INTO seats (bus_id, seat_number, seat_type, price_modifier) VALUES ($1, $2, $3, $4)',
+            [busId, String(i), seatType, priceModifier]
+        );
     }
 }
 
