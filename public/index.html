@@ -46,12 +46,16 @@
     <main class="main">
         <!-- Home Section -->
         <section id="home" class="section active">
-            <div class="hero-section">
-                <div class="hero-content">
-                    <h2>Viaja a tu destino favorito</h2>
-                    <p>Compra tus pasajes de bus sin salir de casa</p>
-                    <div class="search-card">
-                        <form id="searchForm" class="search-form">
+            <!-- Grid Container -->
+            <div class="home-grid">
+
+                <!-- Search Card -->
+                <article class="card" data-testid="search-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-search"></i> Buscar Viaje</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="searchForm">
                             <div class="form-group">
                                 <label for="origin"><i class="fas fa-map-marker-alt"></i> Desde</label>
                                 <select id="origin" required>
@@ -68,96 +72,105 @@
                                 <label for="travelDate"><i class="fas fa-calendar-alt"></i> Fecha de ida</label>
                                 <input type="date" id="travelDate" required>
                             </div>
-                            <button type="submit" class="btn btn-primary">BUSCAR</button>
+                            <button type="submit" class="btn btn-primary btn-block">BUSCAR</button>
                         </form>
                     </div>
-                </div>
-            </div>
+                </article>
 
-            <div class="container page-content">
-                <!-- Loading -->
-                <div id="loading" class="loading hidden">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Buscando viajes disponibles...</p>
-                </div>
+                <!-- Search Results Card -->
+                <article class="card" data-testid="results-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-list"></i> Viajes Disponibles</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="loading" class="loading hidden">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Buscando viajes disponibles...</p>
+                        </div>
+                        <div id="searchResults" class="search-results hidden">
+                            <div id="schedulesList" class="schedules-list"></div>
+                            <!-- Empty State for Search Results -->
+                            <div id="noResults" class="empty-state hidden">
+                                <i class="fas fa-route"></i>
+                                <h4>No se encontraron viajes</h4>
+                                <p>Intenta cambiar el origen, destino o la fecha.</p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
 
-                <!-- Search Results -->
-                <div id="searchResults" class="search-results hidden">
-                    <h3><i class="fas fa-list"></i> Viajes Disponibles</h3>
-                    <div id="schedulesList" class="schedules-list"></div>
-                </div>
-
-                <!-- Seat Selection -->
-                <div id="seatSelection" class="seat-selection hidden">
-                    <div class="seat-selection-header">
-                        <button id="backToResults" class="btn btn-secondary">
+                <!-- Seat Selection Card -->
+                <article class="card" data-testid="seat-selection-card">
+                    <div class="card-header">
+                        <button id="backToResults" class="btn btn-secondary btn-sm hidden">
                             <i class="fas fa-arrow-left"></i> Volver
                         </button>
-                        <h3 id="selectedScheduleInfo"></h3>
+                        <h3 id="selectedScheduleInfo">Selecciona tus Asientos</h3>
                     </div>
-                    
-                    <div class="reservation-options">
-                        <div class="option-card">
-                            <input type="radio" id="reserveSeats" name="reservationType" value="seats" checked>
-                            <label for="reserveSeats">
-                                <i class="fas fa-chair"></i>
-                                <span>Reservar Asientos</span>
-                                <small>Selecciona asientos individuales</small>
-                            </label>
-                        </div>
-                        <div class="option-card">
-                            <input type="radio" id="reserveFullBus" name="reservationType" value="full_bus">
-                            <label for="reserveFullBus">
-                                <i class="fas fa-bus"></i>
-                                <span>Autobús Completo</span>
-                                <small>Reserva todo el autobús</small>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="seatMapContainer" class="seat-map-container">
-                        <div class="bus-layout">
-                            <div class="bus-front">
-                                <i class="fas fa-steering-wheel"></i>
-                                <span>Conductor</span>
+                    <div id="seatSelection" class="card-body hidden">
+                        <div class="reservation-options">
+                            <div class="option-card">
+                                <input type="radio" id="reserveSeats" name="reservationType" value="seats" checked>
+                                <label for="reserveSeats">
+                                    <i class="fas fa-chair"></i>
+                                    <span>Reservar Asientos</span>
+                                </label>
                             </div>
-                            <div id="seatMap" class="seat-map"></div>
+                            <div class="option-card">
+                                <input type="radio" id="reserveFullBus" name="reservationType" value="full_bus">
+                                <label for="reserveFullBus">
+                                    <i class="fas fa-bus"></i>
+                                    <span>Autobús Completo</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="seatMapContainer" class="seat-map-container">
+                            <div class="bus-layout">
+                                <div class="bus-front">
+                                    <i class="fas fa-steering-wheel"></i>
+                                    <span>Conductor</span>
+                                </div>
+                                <div id="seatMap" class="seat-map"></div>
+                                <!-- Empty State for Seat Map -->
+                                <div id="noSeatMap" class="empty-state hidden">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <h4>No se pudo cargar el mapa de asientos</h4>
+                                    <p>Por favor, selecciona un viaje para ver los asientos.</p>
+                                </div>
+                            </div>
                             <div class="seat-legend">
-                                <div class="legend-item">
-                                    <div class="seat-demo available"></div>
-                                    <span>Disponible</span>
-                                </div>
-                                <div class="legend-item">
-                                    <div class="seat-demo selected"></div>
-                                    <span>Seleccionado</span>
-                                </div>
-                                <div class="legend-item">
-                                    <div class="seat-demo occupied"></div>
-                                    <span>Ocupado</span>
-                                </div>
-                                <div class="legend-item">
-                                    <div class="seat-demo premium"></div>
-                                    <span>Premium</span>
-                                </div>
+                                <div class="legend-item"><div class="seat-demo available"></div><span>Disponible</span></div>
+                                <div class="legend-item"><div class="seat-demo selected"></div><span>Seleccionado</span></div>
+                                <div class="legend-item"><div class="seat-demo occupied"></div><span>Ocupado</span></div>
+                                <div class="legend-item"><div class="seat-demo premium"></div><span>Premium</span></div>
                             </div>
                         </div>
                     </div>
+                </article>
 
-                    <div class="price-summary">
-                        <div class="selected-seats-info">
-                            <h4>Asientos Seleccionados: <span id="selectedSeatsCount">0</span></h4>
-                            <div id="selectedSeatsList"></div>
-                        </div>
-                        <div class="total-price">
-                            <h3>Total: $<span id="totalPrice">0.00</span></h3>
-                        </div>
-                        <button id="proceedToReservation" class="btn btn-primary btn-large" disabled>
-                            <i class="fas fa-credit-card"></i> Proceder con la Reserva
-                        </button>
+                <!-- Summary Card -->
+                <article class="card" data-testid="summary-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-shopping-cart"></i> Resumen de Reserva</h3>
                     </div>
-                </div>
+                    <div class="card-body">
+                        <div class="price-summary">
+                            <div class="selected-seats-info">
+                                <h4>Asientos: <span id="selectedSeatsCount">0</span></h4>
+                                <div id="selectedSeatsList"></div>
+                            </div>
+                            <div class="total-price">
+                                <h3>Total: $<span id="totalPrice">0.00</span></h3>
+                            </div>
+                            <button id="proceedToReservation" class="btn btn-primary btn-block" disabled>
+                                <i class="fas fa-credit-card"></i> Proceder con la Reserva
+                            </button>
+                        </div>
+                    </div>
+                </article>
 
-                <!-- Reservation Form -->
+                <!-- Reservation Form (remains hidden until needed) -->
                 <div id="reservationForm" class="reservation-form hidden">
                     <h3><i class="fas fa-user"></i> Información del Pasajero</h3>
                     <form id="customerForm">
@@ -187,7 +200,7 @@
                     </form>
                 </div>
 
-                <!-- Payment Instructions -->
+                <!-- Payment Instructions (remains hidden until needed) -->
                 <div id="paymentInstructions" class="payment-instructions hidden">
                     <div class="success-icon">
                         <i class="fas fa-check-circle"></i>
