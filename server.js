@@ -47,8 +47,7 @@ app.use(
 // 2. CORS con Allowlist
 const allowlist = [
   'http://localhost:3000',
-  // !! IMPORTANTE: Añade aquí la URL de tu frontend en Render
-  // 'https://tu-app.onrender.com'
+  'https://bus-reservation-api-rp8b.onrender.com' // URL de producción
 ];
 const corsOptions = {
   origin: (origin, callback) => {
