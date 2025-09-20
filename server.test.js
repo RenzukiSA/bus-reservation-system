@@ -1,24 +1,6 @@
 const request = require('supertest');
-const appPromise = require('./server'); // Importar la promesa de la app
-
-let app;
-
-// Mock de la base de datos para evitar conexiones reales durante las pruebas
-jest.mock('./database/db', () => ({
-  query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-  connect: jest.fn(() => ({
-    query: jest.fn(),
-    release: jest.fn(),
-  })),
-}));
-
-jest.mock('./database/init', () => ({
-  initDatabase: jest.fn().mockResolvedValue(true),
-}));
-
-beforeAll(async () => {
-  app = await appPromise; // Espera a que la app esté lista
-});
+const app = require('./app'); // Importar la app directamente desde app.js
+const pool = require('./database/db'); // Importar el pool (que ya es un mock en test)
 
 describe('Smoke Tests del Servidor', () => {
 
@@ -70,18 +52,9 @@ describe('Rutas de Reservas (/api/reservations)', () => {
   const invalidUUID = '12345';
   const nonExistentUUID = 'a47ac10b-58cc-4372-a567-0e02b2c3d47a';
 
-  // Mock para simular una reserva encontrada
-  const mockReservation = {
-    id: validUUID,
-    reservation_date: '2025-10-10',
-    status: 'pending',
-    // ... otros campos públicos
-  };
-
   test('GET /:reservationId debe devolver los detalles públicos con un UUID válido', async () => {
-    // Simular que la DB encuentra la reserva
-    const dbMock = require('./database/db');
-    dbMock.query.mockResolvedValueOnce({ rows: [mockReservation], rowCount: 1 });
+    const mockReservation = { id: validUUID, status: 'confirmed' };
+    jest.spyOn(pool, 'query').mockResolvedValueOnce({ rows: [mockReservation], rowCount: 1 });
 
     const response = await request(app)
       .get(`/api/reservations/${validUUID}`)
@@ -102,9 +75,7 @@ describe('Rutas de Reservas (/api/reservations)', () => {
   });
 
   test('GET /:reservationId debe devolver 404 si el UUID no se encuentra', async () => {
-    // Simular que la DB no encuentra nada
-    const dbMock = require('./database/db');
-    dbMock.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    jest.spyOn(pool, 'query').mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     await request(app)
       .get(`/api/reservations/${nonExistentUUID}`)
@@ -141,18 +112,6 @@ describe('Autenticación de Administrador (/api/admin)', () => {
 });
 
 describe('Sistema de Bloqueo de Asientos (Holds)', () => {
-  const mockClient = { 
-    query: jest.fn(), 
-    release: jest.fn() 
-  };
-  const dbMock = require('./database/db');
-  dbMock.connect.mockImplementation(() => mockClient);
-
-  beforeEach(() => {
-    mockClient.query.mockReset();
-    mockClient.release.mockReset();
-  });
-
   const holdPayload = {
     schedule_id: 1, 
     reservation_date: '2025-12-25',
@@ -161,15 +120,8 @@ describe('Sistema de Bloqueo de Asientos (Holds)', () => {
 
   test('POST /holds debe devolver 409 (Conflict) si se intenta bloquear un asiento ya bloqueado', async () => {
     // --- PRIMERA LLAMADA (Exitosa) ---
-    const insertResult = { rows: [{ id: 'some-uuid', expires_at: new Date() }], rowCount: 1 };
-    mockClient.query
-      .mockImplementation(async (queryText) => {
-        const trimmedQuery = queryText.trim();
-        if (trimmedQuery.startsWith('INSERT INTO holds')) return insertResult;
-        if (trimmedQuery.includes('SELECT seats_reserved FROM reservations')) return { rows: [], rowCount: 0 };
-        if (trimmedQuery.includes('SELECT seats_held FROM holds')) return { rows: [], rowCount: 0 };
-        return { rows: [], rowCount: 0 }; // Para BEGIN, COMMIT, etc.
-      });
+    const mockClient = { query: jest.fn().mockResolvedValue({ rows: [{ id: 'some-uuid' }], rowCount: 1 }), release: jest.fn() };
+    jest.spyOn(pool, 'connect').mockResolvedValueOnce(mockClient);
 
     await request(app)
       .post('/api/holds')
@@ -177,15 +129,16 @@ describe('Sistema de Bloqueo de Asientos (Holds)', () => {
       .expect(201);
 
     // --- SEGUNDA LLAMADA (Falla por colisión) ---
-    mockClient.query.mockReset();
-    mockClient.query
-      .mockImplementation(async (queryText) => {
-        const trimmedQuery = queryText.trim();
-        if (trimmedQuery.includes('SELECT seats_reserved FROM reservations')) return { rows: [], rowCount: 0 };
-        // Ahora, la consulta de holds devuelve un asiento ocupado
-        if (trimmedQuery.includes('SELECT seats_held FROM holds')) return { rows: [{ seats_held: holdPayload.selected_seats }], rowCount: 1 };
-        return { rows: [], rowCount: 0 };
-      });
+    const mockClientCollision = { 
+      query: jest.fn().mockImplementation((queryText) => {
+        if (queryText.includes('SELECT seats_held')) {
+          return Promise.resolve({ rows: [{ seats_held: [10] }], rowCount: 1 });
+        }
+        return Promise.resolve({ rows: [], rowCount: 0 });
+      }),
+      release: jest.fn()
+    };
+    jest.spyOn(pool, 'connect').mockResolvedValueOnce(mockClientCollision);
 
     await request(app)
       .post('/api/holds')
@@ -194,13 +147,9 @@ describe('Sistema de Bloqueo de Asientos (Holds)', () => {
   });
 
   test('POST /reservations debe devolver 404 si el hold_id ha expirado', async () => {
-    const expiredHoldId = 'expired-uuid';
-
-    // Simular que la consulta del hold no encuentra nada porque ha expirado
-    mockClient.query.mockImplementation(async (queryText) => {
-      if (queryText.trim().startsWith('SELECT * FROM holds')) return { rows: [], rowCount: 0 };
-      return { rows: [], rowCount: 0 };
-    });
+    const expiredHoldId = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'; // Usar un UUID válido
+    const mockClient = { query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }), release: jest.fn() };
+    jest.spyOn(pool, 'connect').mockResolvedValueOnce(mockClient);
 
     await request(app)
       .post('/api/reservations')
@@ -210,5 +159,32 @@ describe('Sistema de Bloqueo de Asientos (Holds)', () => {
         customer_phone: '12345'
       })
       .expect(404);
+  });
+});
+
+describe('Validación con Zod', () => {
+  test('GET /api/buses/schedules debe devolver 400 si falta un parámetro', async () => {
+    const response = await request(app)
+      .get('/api/buses/schedules?origin=Morelia&date=2025-12-25') // Falta destination
+      .expect(400);
+
+    expect(response.body.error).toBe('Datos de entrada inválidos.');
+    expect(response.body.details[0].field).toBe('destination');
+    expect(response.body.details[0].message).toBe('Required'); // Zod v3 devuelve 'Required' por defecto
+  });
+
+  test('POST /api/reservations debe devolver 400 si el hold_id no es un UUID', async () => {
+    const response = await request(app)
+      .post('/api/reservations')
+      .send({
+        hold_id: 'not-a-uuid',
+        customer_name: 'Test User',
+        customer_phone: '1234567890'
+      })
+      .expect(400);
+
+    expect(response.body.error).toBe('Datos de entrada inválidos.');
+    expect(response.body.details[0].field).toBe('hold_id');
+    expect(response.body.details[0].message).toBe('El ID del bloqueo no es válido.');
   });
 });

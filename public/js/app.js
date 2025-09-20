@@ -183,6 +183,14 @@ async function handleSearch(e) {
         return;
     }
     
+    try {
+        // Validar con Zod antes de enviar
+        window.schemas.TripQuerySchema.parse({ origin, destination, date });
+    } catch (error) {
+        handleZodError(error, 'searchForm');
+        return;
+    }
+    
     showLoading();
     
     try {
@@ -521,6 +529,14 @@ async function handleReservation(e) {
         customer_phone: customerPhone,
         customer_email: customerEmail
     };
+
+    try {
+        // Validar con Zod antes de enviar
+        window.schemas.CreateReservationSchema.parse(reservationData);
+    } catch (error) {
+        handleZodError(error, 'customerForm');
+        return;
+    }
     
     try {
         const response = await fetch(`${API_BASE}/reservations`, {
@@ -717,4 +733,23 @@ function closeModal() {
 function showModal(content) {
     document.getElementById('modalBody').innerHTML = content;
     document.getElementById('modal').classList.remove('hidden');
+}
+
+function handleZodError(error, formId) {
+    // Limpiar errores anteriores
+    const form = document.getElementById(formId);
+    form.querySelectorAll('.error-feedback').forEach(el => el.remove());
+
+    if (error.errors) {
+        error.errors.forEach(err => {
+            const fieldName = err.path[0];
+            const input = form.querySelector(`[name="${fieldName}"]`) || form.querySelector(`#${fieldName}`);
+            if (input) {
+                const errorElement = document.createElement('div');
+                errorElement.className = 'error-feedback';
+                errorElement.textContent = err.message;
+                input.parentElement.appendChild(errorElement);
+            }
+        });
+    }
 }

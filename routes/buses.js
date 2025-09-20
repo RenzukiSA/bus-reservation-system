@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/db');
+const { validate } = require('../middleware/validate');
+const { TripQuerySchema } = require('../shared/validation');
 
 // Middleware para verificar si el usuario es administrador
 const checkAdmin = (req, res, next) => {
@@ -16,11 +18,8 @@ const checkAdmin = (req, res, next) => {
 // IMPORTANTE: Las rutas más específicas deben definirse ANTES que las rutas genéricas con parámetros (como /:id).
 
 // Obtener horarios disponibles para una ruta y fecha
-router.get('/schedules', async (req, res) => {
+router.get('/schedules', validate('query', TripQuerySchema), async (req, res) => {
     const { origin, destination, date } = req.query;
-    if (!origin || !destination || !date) {
-        return res.status(400).json({ error: 'Faltan parámetros: origen, destino o fecha' });
-    }
 
     try {
         // 1. Encontrar la ruta usando ILIKE
