@@ -4,35 +4,56 @@ const bcrypt = require('bcrypt');
 const pool = require('../database/db');
 
 // Middleware para verificar si el usuario es administrador
-const checkAdmin = (req, res, next) => {
+const requireAdmin = (req, res, next) => {
     if (req.session.isAdmin) {
         next();
     } else {
-        res.status(401).json({ error: 'Acceso no autorizado.' });
+        res.status(401).json({ error: 'Acceso no autorizado. Se requiere iniciar sesión como administrador.' });
     }
 };
 
 // --- Autenticación ---
 
+// Endpoint para obtener un token CSRF
+router.get('/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
+
 // Login
 router.post('/login', async (req, res) => {
-    const { password } = req.body;
+    const { password, totp_token } = req.body;
 
-    // Validar que la contraseña del administrador esté configurada en el servidor
-    if (!process.env.ADMIN_PASSWORD) {
-        console.error('La contraseña de administrador no está configurada en las variables de entorno.');
+    // 1. Validar que la contraseña del administrador esté configurada
+    if (!process.env.ADMIN_PASSWORD_HASH) {
+        console.error('El hash de la contraseña de administrador no está configurado.');
         return res.status(500).json({ success: false, error: 'Error de configuración del servidor.' });
     }
 
     try {
-        // Comparar la contraseña proporcionada con la variable de entorno
-        // Nota: Se asume que ADMIN_PASSWORD es texto plano. Si fuera un hash, usaríamos bcrypt.compare.
-        if (password === process.env.ADMIN_PASSWORD) {
-            req.session.isAdmin = true;
-            res.json({ success: true });
-        } else {
-            res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
+        // 2. Comparar el hash de la contraseña
+        const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
+        
+        if (!passwordMatch) {
+            return res.status(401).json({ success: false, error: 'Credenciales incorrectas.' });
         }
+
+        // 3. (Hook) Verificar token 2FA si está habilitado
+        if (process.env.ENABLE_2FA === 'true') {
+            // --- INICIO DEL HOOK PARA 2FA ---
+            // Aquí iría la lógica para verificar el token TOTP (Time-based One-Time Password)
+            // Por ejemplo, usando una librería como `speakeasy` o `otplib`.
+            // const isValidToken = verifyTotpToken(totp_token, process.env.ADMIN_2FA_SECRET);
+            // if (!isValidToken) {
+            //     return res.status(401).json({ success: false, error: 'Token 2FA inválido.' });
+            // }
+            // --- FIN DEL HOOK PARA 2FA ---
+            console.log('2FA está habilitado, pero la lógica de verificación aún no está implementada.');
+        }
+
+        // 4. Si todo es correcto, establecer la sesión
+        req.session.isAdmin = true;
+        res.json({ success: true });
+
     } catch (error) {
         console.error('Error en el login de administrador:', error);
         res.status(500).json({ success: false, error: 'Error interno del servidor.' });
@@ -58,7 +79,7 @@ router.get('/status', (req, res) => {
 // --- Gestión de Reservaciones ---
 
 // Obtener todas las reservaciones con filtros opcionales
-router.get('/reservations', checkAdmin, async (req, res) => {
+router.get('/reservations', requireAdmin, async (req, res) => {
     const { status, date } = req.query;
     let query = `
         SELECT 
@@ -96,7 +117,7 @@ router.get('/reservations', checkAdmin, async (req, res) => {
 });
 
 // Get dashboard statistics
-router.get('/dashboard', checkAdmin, async (req, res) => {
+router.get('/dashboard', requireAdmin, async (req, res) => {
     try {
         const statusQuery = `SELECT status, COUNT(*) as count FROM reservations GROUP BY status`;
         const revenueQuery = `
@@ -139,7 +160,7 @@ router.get('/dashboard', checkAdmin, async (req, res) => {
 });
 
 // Get all schedules for admin
-router.get('/schedules', checkAdmin, async (req, res) => {
+router.get('/schedules', requireAdmin, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
@@ -166,7 +187,7 @@ router.get('/schedules', checkAdmin, async (req, res) => {
 });
 
 // Get specific schedule for admin
-router.get('/schedules/:id', checkAdmin, async (req, res) => {
+router.get('/schedules/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(`
@@ -195,7 +216,7 @@ router.get('/schedules/:id', checkAdmin, async (req, res) => {
 });
 
 // Create new schedule
-router.post('/schedules', checkAdmin, async (req, res) => {
+router.post('/schedules', requireAdmin, async (req, res) => {
     const { route_id, bus_id, departure_time, arrival_time, days_of_week, price_multiplier = 1.0, status = 'active' } = req.body;
     
     if (!route_id || !bus_id || !departure_time || !arrival_time || !days_of_week) {
@@ -230,7 +251,7 @@ router.post('/schedules', checkAdmin, async (req, res) => {
 });
 
 // Update schedule
-router.put('/schedules/:id', checkAdmin, async (req, res) => {
+router.put('/schedules/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const client = await pool.connect();
 
@@ -271,7 +292,7 @@ router.put('/schedules/:id', checkAdmin, async (req, res) => {
 });
 
 // Delete schedule
-router.delete('/schedules/:id', checkAdmin, async (req, res) => {
+router.delete('/schedules/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const client = await pool.connect();
 
@@ -306,7 +327,7 @@ router.delete('/schedules/:id', checkAdmin, async (req, res) => {
 });
 
 // Update reservation status
-router.put('/reservations/:id/status', checkAdmin, async (req, res) => {
+router.put('/reservations/:id/status', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     

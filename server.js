@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
+const csurf = require('csurf');
 
 // --- Configuración de Entorno ---
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -19,6 +20,7 @@ const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
 const routesRoutes = require('./routes/routes');
+const holdsRoutes = require('./routes/holds');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
@@ -118,6 +120,20 @@ app.use(session({
     }
 }));
 
+// CSRF Protection
+const csrfProtection = csurf();
+
+// Aplicar CSRF solo si no estamos en entorno de prueba
+if (process.env.NODE_ENV !== 'test') {
+    app.use((req, res, next) => {
+        // Excluir rutas específicas de la protección CSRF
+        if (req.path === '/api/reservations/expire-pending' || req.path === '/api/holds/expire') {
+            return next();
+        }
+        csrfProtection(req, res, next);
+    });
+}
+
 // Ruta explícita para servir admin.html con protección
 app.get('/admin.html', (req, res) => {
     if (req.session.isAdmin) {
@@ -134,6 +150,17 @@ app.use('/api/admin', apiLimiter, adminRoutes);
 // Rutas que no necesitan rate limiting tan estricto
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routesRoutes);
+app.use('/api/holds', holdsRoutes);
+
+// Manejador de errores de CSRF global
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN') {
+    console.warn(`Intento de CSRF bloqueado desde la IP: ${req.ip}`);
+    res.status(403).json({ error: 'Token CSRF inválido o ausente. Petición bloqueada.' });
+  } else {
+    next(err);
+  }
+});
 
 // --- Inicialización del Servidor ---
 
