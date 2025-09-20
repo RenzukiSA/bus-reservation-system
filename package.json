@@ -4,9 +4,11 @@
   "description": "Sistema de reservas de autobuses para empresas de transporte",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node dist/server.js",
     "dev": "nodemon server.js",
     "test": "jest",
+    "build": "tsc",
+    "postbuild": "cp -r shared/es.json dist/shared/",
     "build:shared": "node scripts/build-shared.js"
   },
   "jest": {
