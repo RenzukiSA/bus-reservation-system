@@ -23,14 +23,19 @@ Una aplicación web completa para la reserva de asientos y autobuses completos p
 
 1.  **Clonar el repositorio**
 
-2.  **Crear un archivo `.env`** en la raíz del proyecto con las siguientes variables:
+2.  **Configurar las variables de entorno**
+    Copia el archivo `.env.example` y renómbralo a `.env`. Luego, rellena las variables con tus propios valores.
 
+    ```bash
+    cp .env.example .env
     ```
-    DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE_NAME
-    PORT=3000
-    SESSION_SECRET=tu_secreto_de_sesion_muy_largo_y_seguro
-    ADMIN_PASSWORD=tu_contraseña_de_administrador
-    ```
+
+    El archivo `.env` requiere las siguientes variables:
+
+    - `DATABASE_URL`: La URL de conexión a tu base de datos PostgreSQL.
+    - `PORT`: El puerto en el que se ejecutará el servidor (por defecto `3000`).
+    - `SESSION_SECRET`: Una cadena larga y aleatoria para proteger las sesiones de usuario.
+    - `ADMIN_PASSWORD`: La contraseña para acceder al panel de administración.
 
 3.  **Instalar dependencias**
 
