@@ -60,3 +60,51 @@ describe('Smoke Tests del Servidor', () => {
   });
 
 });
+
+describe('Rutas de Reservas (/api/reservations)', () => {
+  const validUUID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+  const invalidUUID = '12345';
+  const nonExistentUUID = 'a47ac10b-58cc-4372-a567-0e02b2c3d47a';
+
+  // Mock para simular una reserva encontrada
+  const mockReservation = {
+    id: validUUID,
+    reservation_date: '2025-10-10',
+    status: 'pending',
+    // ... otros campos públicos
+  };
+
+  test('GET /:reservationId debe devolver los detalles públicos con un UUID válido', async () => {
+    // Simular que la DB encuentra la reserva
+    const dbMock = require('./database/db');
+    dbMock.query.mockResolvedValueOnce({ rows: [mockReservation], rowCount: 1 });
+
+    const response = await request(app)
+      .get(`/api/reservations/${validUUID}`)
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    // Verificar que no se exponen campos sensibles
+    expect(response.body.customer_phone).toBeUndefined();
+    expect(response.body.customer_email).toBeUndefined();
+    expect(response.body.id).toBe(validUUID);
+  });
+
+  test('GET /:reservationId debe devolver 400 con un formato de ID inválido', async () => {
+    await request(app)
+      .get(`/api/reservations/${invalidUUID}`)
+      .expect(400)
+      .expect('Content-Type', /json/);
+  });
+
+  test('GET /:reservationId debe devolver 404 si el UUID no se encuentra', async () => {
+    // Simular que la DB no encuentra nada
+    const dbMock = require('./database/db');
+    dbMock.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    await request(app)
+      .get(`/api/reservations/${nonExistentUUID}`)
+      .expect(404)
+      .expect('Content-Type', /json/);
+  });
+});

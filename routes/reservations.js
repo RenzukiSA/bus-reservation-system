@@ -1,7 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuidv4, validate: uuidValidate } = require('uuid');
 const pool = require('../database/db');
+
+// Middleware para validar que el ID de la reserva es un UUID válido
+const validateReservationId = (req, res, next) => {
+    const { reservationId } = req.params;
+    if (!uuidValidate(reservationId)) {
+        return res.status(400).json({ error: 'El formato del ID de la reserva no es válido.' });
+    }
+    next();
+};
 
 // Create a new reservation
 router.post('/', async (req, res) => {
@@ -118,20 +127,26 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Get reservation details
-router.get('/:reservationId', async (req, res) => {
+// Get public reservation details by public ID (UUID)
+router.get('/:reservationId', validateReservationId, async (req, res) => {
     const { reservationId } = req.params;
 
     try {
         const query = `
             SELECT 
-                res.*,
+                res.id, -- public_id
+                res.reservation_date,
+                res.reservation_type,
+                res.total_price,
+                res.status,
+                res.payment_deadline,
                 s.departure_time,
                 s.arrival_time,
                 r.origin,
                 r.destination,
                 b.bus_number,
-                b.bus_type
+                b.type as bus_type,
+                res.seats_reserved
             FROM reservations res
             JOIN schedules s ON res.schedule_id = s.id
             JOIN routes r ON s.route_id = r.id
@@ -146,24 +161,28 @@ router.get('/:reservationId', async (req, res) => {
 
         const reservation = result.rows[0];
 
-        // If it's a seat reservation, get seat details
+        // Si es una reserva de asientos, obtener los números de asiento
         if (reservation.reservation_type === 'seats' && reservation.seats_reserved) {
             try {
-                const seatIds = JSON.parse(reservation.seats_reserved);
+                const seatIds = reservation.seats_reserved; // Ya es un array de IDs
                 const placeholders = seatIds.map((_, i) => `$${i + 1}`).join(',');
-                const seatsQuery = `SELECT seat_number, seat_type FROM seats WHERE id IN (${placeholders})`;
+                const seatsQuery = `SELECT seat_number FROM seats WHERE id IN (${placeholders})`;
                 const seatsResult = await pool.query(seatsQuery, seatIds);
-
-                res.json({
-                    ...reservation,
-                    seats: seatsResult.rows
-                });
+                
+                // Añadir los números de asiento a la respuesta pública
+                reservation.seats = seatsResult.rows.map(s => s.seat_number);
             } catch (e) {
-                res.json(reservation);
+                // Si falla el parseo de asientos, no es crítico. Continuar sin ellos.
+                console.error('Error al procesar asientos para reserva pública:', e);
+                reservation.seats = [];
             }
-        } else {
-            res.json(reservation);
         }
+
+        // Eliminar el campo interno seats_reserved antes de enviar la respuesta
+        delete reservation.seats_reserved;
+
+        res.json(reservation);
+
     } catch (err) {
         console.error('Error al obtener la reservación:', err);
         res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
@@ -171,7 +190,7 @@ router.get('/:reservationId', async (req, res) => {
 });
 
 // Confirm payment (admin endpoint)
-router.put('/:reservationId/confirm', async (req, res) => {
+router.put('/:reservationId/confirm', validateReservationId, async (req, res) => {
     const { reservationId } = req.params;
 
     try {
@@ -194,7 +213,7 @@ router.put('/:reservationId/confirm', async (req, res) => {
 });
 
 // Cancel reservation
-router.put('/:reservationId/cancel', async (req, res) => {
+router.put('/:reservationId/cancel', validateReservationId, async (req, res) => {
     const { reservationId } = req.params;
 
     try {
