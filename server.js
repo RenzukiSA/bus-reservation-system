@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
+const csurf = require('csurf');
 
 // --- Configuración de Entorno ---
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -118,6 +119,16 @@ app.use(session({
     }
 }));
 
+// Middleware de protección CSRF
+const csrfProtection = csurf();
+app.use((req, res, next) => {
+  // Excluir la protección CSRF de webhooks o rutas que no usan cookies/sesiones
+  if (req.path === '/api/reservations/expire-pending') {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
+
 // Ruta explícita para servir admin.html con protección
 app.get('/admin.html', (req, res) => {
     if (req.session.isAdmin) {
@@ -134,6 +145,16 @@ app.use('/api/admin', apiLimiter, adminRoutes);
 // Rutas que no necesitan rate limiting tan estricto
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routesRoutes);
+
+// Manejador de errores de CSRF global
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN') {
+    console.warn(`Intento de CSRF bloqueado desde la IP: ${req.ip}`);
+    res.status(403).json({ error: 'Token CSRF inválido o ausente. Petición bloqueada.' });
+  } else {
+    next(err);
+  }
+});
 
 // --- Inicialización del Servidor ---
 

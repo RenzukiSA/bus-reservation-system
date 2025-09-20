@@ -1,20 +1,126 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    // --- Check authentication and initialize --- 
-    const isAdmin = await checkAuth();
-    if (!isAdmin) {
-        // If not admin, show a login modal instead of redirecting
-        showLoginModal();
-    } else {
-        // If admin, initialize the panel
-        initializePanel();
-    }
-});
+document.addEventListener('DOMContentLoaded', initAuth);
 
-function initializePanel() {
-    document.body.classList.add('logged-in'); // Add class to show main content
+// --- ESTADO GLOBAL --- 
+let csrfToken = null;
+
+// --- INICIALIZACIÓN Y AUTENTICACIÓN ---
+
+async function initAuth() {
+    try {
+        const { isAdmin } = await checkSession();
+        if (isAdmin) {
+            await initializePanel();
+        } else {
+            showLogin();
+        }
+    } catch (error) {
+        console.error('Error de inicialización:', error);
+        showLogin(); // Si hay cualquier error, mostrar el login
+    }
+}
+
+async function checkSession() {
+    const response = await fetch('/api/admin/status');
+    if (!response.ok) {
+        throw new Error('No se pudo verificar la sesión.');
+    }
+    return response.json();
+}
+
+async function showLogin() {
+    document.getElementById('login-container').style.display = 'flex';
+    document.getElementById('admin-panel').style.display = 'none';
+    
+    // Obtener el token CSRF para el formulario de login
+    try {
+        const response = await fetch('/api/admin/csrf-token');
+        const data = await response.json();
+        csrfToken = data.csrfToken;
+        document.getElementById('csrf-token').value = csrfToken;
+    } catch (error) {
+        console.error('Error al obtener el token CSRF:', error);
+        const errorEl = document.getElementById('login-error');
+        errorEl.textContent = 'Error de seguridad. No se pudo cargar el formulario.';
+    }
+    
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+}
+
+async function initializePanel() {
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+
+    // Obtener token CSRF para futuras acciones (logout, updates, etc.)
+    try {
+        const response = await fetch('/api/admin/csrf-token');
+        const data = await response.json();
+        csrfToken = data.csrfToken;
+    } catch (error) {
+        console.error('Error al obtener el token CSRF para el panel:', error);
+        // Manejar el error, quizás mostrando una notificación
+    }
+
     setupNavigation();
-    loadSection('dashboard'); // Load dashboard by default
+    loadSection('dashboard');
     setupResponsiveSidebar();
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('login-error');
+    errorEl.textContent = '';
+
+    try {
+        const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'csrf-token': csrfToken // Enviar el token CSRF en la cabecera
+            },
+            body: JSON.stringify({ password })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'Credenciales incorrectas');
+        }
+
+        // Ocultar login y mostrar panel
+        await initializePanel();
+
+    } catch (error) {
+        errorEl.textContent = error.message;
+        // Volver a obtener un nuevo token CSRF en caso de fallo de autenticación
+        await showLogin(); 
+    }
+}
+
+async function logout(e) {
+    e.preventDefault();
+    try {
+        await fetch('/api/admin/logout', {
+            method: 'POST',
+            headers: { 'csrf-token': csrfToken } // Proteger también el logout
+        });
+        // Mostrar el login en lugar de redirigir
+        showLogin();
+    } catch (error) {
+        showNotification('Error al cerrar sesión.', 'error');
+    }
+}
+
+function setupNavigation() {
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            const targetId = link.getAttribute('href').substring(1);
+            loadSection(targetId);
+        });
+    });
+    document.getElementById('logout-btn').addEventListener('click', logout);
 }
 
 function setupResponsiveSidebar() {
@@ -34,86 +140,6 @@ function setupResponsiveSidebar() {
     }
 }
 
-// --- AUTHENTICATION & NAVIGATION --- 
-
-async function checkAuth() {
-    try {
-        const response = await fetch('/api/admin/status');
-        if (!response.ok) return false;
-        const data = await response.json();
-        return data.isAdmin;
-    } catch {
-        return false;
-    }
-}
-
-function showLoginModal() {
-    const modalHTML = `
-        <div id="login-modal" class="auth-modal">
-            <div class="auth-modal-content">
-                <h3><i class="fas fa-user-shield"></i> Acceso de Administrador</h3>
-                <form id="login-form">
-                    <div class="form-group">
-                        <label for="password">Contraseña</label>
-                        <input type="password" id="password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Ingresar</button>
-                    <p id="login-error" class="error-message"></p>
-                </form>
-                 <a href="/" class="back-link">Volver a la página principal</a>
-            </div>
-        </div>
-    `;
-    document.body.innerHTML = modalHTML;
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-}
-
-async function handleLogin(e) {
-    e.preventDefault();
-    const password = document.getElementById('password').value;
-    const errorEl = document.getElementById('login-error');
-    errorEl.textContent = '';
-
-    try {
-        const response = await fetch('/api/admin/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password })
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Contraseña incorrecta');
-        
-        // On success, reload the page to initialize the panel
-        window.location.reload();
-
-    } catch (error) {
-        errorEl.textContent = error.message;
-    }
-}
-
-function setupNavigation() {
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-            const targetId = link.getAttribute('href').substring(1);
-            loadSection(targetId);
-        });
-    });
-    document.getElementById('logout-btn').addEventListener('click', logout);
-}
-
-async function logout(e) {
-    e.preventDefault();
-    try {
-        await fetch('/api/admin/logout', { method: 'POST' });
-        window.location.href = '/';
-    } catch (error) {
-        showNotification('Error al cerrar sesión.', 'error');
-    }
-}
-
 // --- DYNAMIC CONTENT LOADING --- 
 
 function loadSection(sectionId) {
@@ -130,9 +156,9 @@ function loadSection(sectionId) {
     switch (sectionId) {
         case 'dashboard': loadDashboard(); break;
         case 'reservations': loadReservations(); break;
-        case 'routes': loadRoutesAdmin(); break;
-        case 'buses': loadBusesAdmin(); break;
-        case 'schedules': loadSchedulesAdmin(); break;
+        case 'routes': loadGenericAdminSection('routes'); break;
+        case 'buses': loadGenericAdminSection('buses'); break;
+        case 'schedules': loadGenericAdminSection('schedules'); break;
     }
 }
 
@@ -210,7 +236,10 @@ async function updateReservationStatus(id, status) {
     try {
         const response = await fetch(`/api/admin/reservations/${id}/status`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'csrf-token': csrfToken
+            },
             body: JSON.stringify({ status })
         });
         if (!response.ok) {
@@ -417,7 +446,10 @@ async function handleSaveItem(e, sectionKey, itemId) {
     try {
         const response = await fetch(isEdit ? `${config.endpoint}/${itemId}` : config.endpoint, {
             method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'csrf-token': csrfToken
+            },
             body: JSON.stringify(body)
         });
         const result = await response.json();
@@ -437,7 +469,10 @@ async function handleDeleteItem(sectionKey, itemId) {
     if (!confirm(`¿Estás seguro de que quieres eliminar esta ${config.singular.toLowerCase()}?`)) return;
 
     try {
-        const response = await fetch(`${config.endpoint}/${itemId}`, { method: 'DELETE' });
+        const response = await fetch(`${config.endpoint}/${itemId}`, {
+            method: 'DELETE',
+            headers: { 'csrf-token': csrfToken }
+        });
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || 'No se pudo eliminar.');
@@ -448,11 +483,6 @@ async function handleDeleteItem(sectionKey, itemId) {
         showNotification(error.message, 'error');
     }
 }
-
-// --- Specific Loaders for Generic Sections ---
-function loadRoutesAdmin() { loadGenericAdminSection('routes'); }
-function loadBusesAdmin() { loadGenericAdminSection('buses'); }
-function loadSchedulesAdmin() { loadGenericAdminSection('schedules'); }
 
 // --- UTILITY FUNCTIONS ---
 

@@ -8,67 +8,94 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Sidebar Navigation -->
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <div class="logo">
-                <img src="images/logo.png" alt="Transportes Express" class="logo-img">
-                <span>Transportes Express</span>
+
+    <!-- Contenedor de Login (visible por defecto) -->
+    <div id="login-container">
+        <div class="login-box">
+            <img src="/images/logo.png" alt="Logo" class="login-logo">
+            <h2>Acceso de Administrador</h2>
+            <form id="login-form">
+                <input type="hidden" id="csrf-token" name="_csrf">
+                <div class="input-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <!-- Campo para 2FA (oculto por ahora) -->
+                <div class="input-group" id="totp-group" style="display: none;">
+                    <label for="totp-token">Token de Autenticación</label>
+                    <input type="text" id="totp-token" name="totp_token" placeholder="123456">
+                </div>
+                <button type="submit" class="btn-login">Ingresar</button>
+                <p id="login-error" class="error-message"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Panel de Administración (oculto por defecto) -->
+    <div id="admin-panel" style="display: none;">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="images/logo.png" alt="Transportes Express" class="logo-img">
+                    <span>Transportes Express</span>
+                </div>
             </div>
-        </div>
-        <ul class="sidebar-menu">
-            <li class="menu-item">
-                <a href="#dashboard" class="nav-link active">
-                    <i class="fas fa-chart-bar"></i>
-                    <span>Dashboard</span>
+            <ul class="sidebar-menu">
+                <li class="menu-item">
+                    <a href="#dashboard" class="nav-link active">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#reservations" class="nav-link">
+                        <i class="fas fa-ticket-alt"></i>
+                        <span>Reservaciones</span>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#routes" class="nav-link">
+                        <i class="fas fa-route"></i>
+                        <span>Rutas</span>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#buses" class="nav-link">
+                        <i class="fas fa-bus"></i>
+                        <span>Autobuses</span>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#schedules" class="nav-link">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Horarios</span>
+                    </a>
+                </li>
+            </ul>
+            <div class="logout-section">
+                <a href="#" id="logout-btn" class="logout-link">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
                 </a>
-            </li>
-            <li class="menu-item">
-                <a href="#reservations" class="nav-link">
-                    <i class="fas fa-ticket-alt"></i>
-                    <span>Reservaciones</span>
-                </a>
-            </li>
-            <li class="menu-item">
-                <a href="#routes" class="nav-link">
-                    <i class="fas fa-route"></i>
-                    <span>Rutas</span>
-                </a>
-            </li>
-            <li class="menu-item">
-                <a href="#buses" class="nav-link">
-                    <i class="fas fa-bus"></i>
-                    <span>Autobuses</span>
-                </a>
-            </li>
-            <li class="menu-item">
-                <a href="#schedules" class="nav-link">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Horarios</span>
-                </a>
-            </li>
-        </ul>
-        <div class="logout-section">
-            <a href="#" id="logout-btn" class="logout-link">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Cerrar Sesión</span>
-            </a>
-        </div>
-    </nav>
+            </div>
+        </nav>
 
-    <!-- Mobile Menu Toggle -->
-    <button class="sidebar-toggle" aria-label="Abrir menú">
-        <i class="fas fa-bars"></i>
-    </button>
+        <!-- Mobile Menu Toggle -->
+        <button class="sidebar-toggle" aria-label="Abrir menú">
+            <i class="fas fa-bars"></i>
+        </button>
 
-    <main id="main-content">
-        <div class="content-header">
-            <h1 id="content-title">Dashboard</h1>
-        </div>
-        <div id="admin-content" class="content-area">
-            <!-- El contenido dinámico se cargará aquí -->
-        </div>
-    </main>
-    <script src="/js/admin.js"></script>
+        <main id="main-content">
+            <div class="content-header">
+                <h1 id="content-title">Dashboard</h1>
+            </div>
+            <div id="admin-content" class="content-area">
+                <!-- El contenido dinámico se cargará aquí -->
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/admin.js?v=1.5"></script>
 </body>
 </html>
