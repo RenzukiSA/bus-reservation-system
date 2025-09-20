@@ -12,24 +12,35 @@ const validateReservationId = (req, res, next) => {
     next();
 };
 
-// Create a new reservation
+// Create a new reservation from a hold
 router.post('/', async (req, res) => {
     const {
-        schedule_id,
-        reservation_date,
-        reservation_type,
-        selected_seats, // array of seat IDs
+        hold_id,
         customer_name,
         customer_phone,
         customer_email
     } = req.body;
 
-    if (!schedule_id || !reservation_date || !reservation_type || !customer_name || !customer_phone) {
-        return res.status(400).json({ error: 'Faltan campos requeridos' });
+    if (!hold_id || !customer_name || !customer_phone) {
+        return res.status(400).json({ error: 'Faltan campos requeridos: hold_id, nombre y teléfono.' });
     }
 
+    const client = await pool.connect();
     try {
-        // 1. Get schedule info
+        await client.query('BEGIN');
+
+        // 1. Validar el hold y obtener sus datos
+        const holdQuery = 'SELECT * FROM holds WHERE id = $1 AND expires_at > NOW() FOR UPDATE';
+        const holdResult = await client.query(holdQuery, [hold_id]);
+
+        if (holdResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'El bloqueo de asientos no es válido o ha expirado.' });
+        }
+        const hold = holdResult.rows[0];
+        const { schedule_id, reservation_date, seats_held: selected_seats } = hold;
+
+        // 2. Get schedule info (ya que no viene en el request)
         const scheduleQuery = `
             SELECT s.*, r.base_price, s.price_multiplier, b.capacity 
             FROM schedules s
@@ -37,81 +48,42 @@ router.post('/', async (req, res) => {
             JOIN buses b ON s.bus_id = b.id
             WHERE s.id = $1
         `;
-        const scheduleResult = await pool.query(scheduleQuery, [schedule_id]);
-        if (scheduleResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Horario no encontrado' });
-        }
+        const scheduleResult = await client.query(scheduleQuery, [schedule_id]);
         const scheduleInfo = scheduleResult.rows[0];
 
-        // 2. Check for existing reservations for this schedule and date
-        const existingReservationsQuery = `
-            SELECT reservation_type, seats_reserved 
-            FROM reservations 
-            WHERE schedule_id = $1 AND reservation_date = $2 AND status IN ('pending', 'confirmed')
-        `;
-        const existingReservationsResult = await pool.query(existingReservationsQuery, [schedule_id, reservation_date]);
+        // 3. Calcular el precio total (la lógica de tipo de reserva se simplifica)
+        const placeholders = selected_seats.map((_, i) => `$${i + 1}`).join(',');
+        const seatsQuery = `SELECT price_modifier FROM seats WHERE id IN (${placeholders})`;
+        const seatsResult = await client.query(seatsQuery, selected_seats);
+        
+        const totalPrice = seatsResult.rows.reduce((sum, seat) => {
+            return sum + (scheduleInfo.base_price * scheduleInfo.price_multiplier * seat.price_modifier);
+        }, 0);
 
-        let reservedSeatIds = [];
-        let isFullBusReserved = false;
-        existingReservationsResult.rows.forEach(r => {
-            if (r.reservation_type === 'full_bus') {
-                isFullBusReserved = true;
-            } else {
-                const seats = JSON.parse(r.seats_reserved || '[]').map(id => parseInt(id, 10));
-                reservedSeatIds.push(...seats);
-            }
-        });
-
-        if (isFullBusReserved) {
-            return res.status(409).json({ error: 'El autobús completo ya ha sido reservado para esta fecha.' });
-        }
-
-        // 3. Calculate total price and validate seats
-        let totalPrice = 0;
-        if (reservation_type === 'full_bus') {
-            if (reservedSeatIds.length > 0) {
-                return res.status(409).json({ error: 'No se puede reservar el autobús completo, ya hay asientos individuales reservados.' });
-            }
-            totalPrice = scheduleInfo.base_price * scheduleInfo.price_multiplier * scheduleInfo.capacity * 0.90; // 10% discount
-        } else if (reservation_type === 'seats') {
-            if (!selected_seats || selected_seats.length === 0) {
-                return res.status(400).json({ error: 'Debe seleccionar al menos un asiento.' });
-            }
-
-            const alreadyReserved = selected_seats.some(id => reservedSeatIds.includes(id));
-            if (alreadyReserved) {
-                return res.status(409).json({ error: 'Uno o más de los asientos seleccionados ya están ocupados.' });
-            }
-
-            const placeholders = selected_seats.map((_, i) => `$${i + 1}`).join(',');
-            const seatsQuery = `SELECT price_modifier FROM seats WHERE id IN (${placeholders})`;
-            const seatsResult = await pool.query(seatsQuery, selected_seats);
-            
-            totalPrice = seatsResult.rows.reduce((sum, seat) => {
-                return sum + (scheduleInfo.base_price * scheduleInfo.price_multiplier * seat.price_modifier);
-            }, 0);
-        } else {
-            return res.status(400).json({ error: 'Tipo de reservación no válido.' });
-        }
-
-        // 4. Create reservation
-        const reservationId = uuidv4();
+        // 4. Crear la reserva
         const timeoutMinutes = process.env.RESERVATION_TIMEOUT_MINUTES || 15;
         const paymentDeadline = new Date(Date.now() + timeoutMinutes * 60000);
-        const seatsReservedJson = reservation_type === 'seats' ? JSON.stringify(selected_seats) : null;
+        const seatsReservedJson = JSON.stringify(selected_seats);
 
         const insertQuery = `
             INSERT INTO reservations (
-                id, schedule_id, reservation_date, reservation_type, seats_reserved, 
+                schedule_id, reservation_date, reservation_type, seats_reserved, 
                 customer_name, customer_phone, customer_email, total_price, payment_deadline, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+            ) VALUES ($1, $2, 'seats', $3, $4, $5, $6, $7, $8, 'pending')
+            RETURNING id
         `;
         const insertParams = [
-            reservationId, schedule_id, reservation_date, reservation_type, seatsReservedJson,
+            schedule_id, reservation_date, seatsReservedJson,
             customer_name, customer_phone, customer_email, totalPrice.toFixed(2), paymentDeadline.toISOString()
         ];
         
-        await pool.query(insertQuery, insertParams);
+        const reservationResult = await client.query(insertQuery, insertParams);
+        const reservationId = reservationResult.rows[0].id;
+
+        // 5. Eliminar el hold
+        await client.query('DELETE FROM holds WHERE id = $1', [hold_id]);
+
+        await client.query('COMMIT');
 
         res.status(201).json({
             success: true,
@@ -122,8 +94,11 @@ router.post('/', async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Error al crear la reservación:', err);
+        await client.query('ROLLBACK');
+        console.error('Error al crear la reservación desde el bloqueo:', err);
         res.status(500).json({ error: 'Error interno del servidor al procesar la reservación.' });
+    } finally {
+        client.release();
     }
 });
 

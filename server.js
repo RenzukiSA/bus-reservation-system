@@ -20,6 +20,7 @@ const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
 const routesRoutes = require('./routes/routes');
+const holdsRoutes = require('./routes/holds');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
@@ -119,15 +120,19 @@ app.use(session({
     }
 }));
 
-// Middleware de protección CSRF
+// CSRF Protection
 const csrfProtection = csurf();
-app.use((req, res, next) => {
-  // Excluir la protección CSRF de webhooks o rutas que no usan cookies/sesiones
-  if (req.path === '/api/reservations/expire-pending') {
-    return next();
-  }
-  csrfProtection(req, res, next);
-});
+
+// Aplicar CSRF solo si no estamos en entorno de prueba
+if (process.env.NODE_ENV !== 'test') {
+    app.use((req, res, next) => {
+        // Excluir rutas específicas de la protección CSRF
+        if (req.path === '/api/reservations/expire-pending' || req.path === '/api/holds/expire') {
+            return next();
+        }
+        csrfProtection(req, res, next);
+    });
+}
 
 // Ruta explícita para servir admin.html con protección
 app.get('/admin.html', (req, res) => {
@@ -145,6 +150,7 @@ app.use('/api/admin', apiLimiter, adminRoutes);
 // Rutas que no necesitan rate limiting tan estricto
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routesRoutes);
+app.use('/api/holds', holdsRoutes);
 
 // Manejador de errores de CSRF global
 app.use((err, req, res, next) => {

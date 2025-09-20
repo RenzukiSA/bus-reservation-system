@@ -100,6 +100,17 @@ async function initDatabase(pool) {
             );
         `);
 
+        // Crear tabla de bloqueos temporales (holds)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS holds (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                schedule_id INT NOT NULL,
+                reservation_date DATE NOT NULL,
+                seats_held JSONB NOT NULL, -- Array de IDs de asientos
+                expires_at TIMESTAMPTZ NOT NULL
+            );
+        `);
+
         // --- ÍNDICES PARA MEJORAR EL RENDIMIENTO ---
         await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_route_id ON schedules(route_id);');
         await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_bus_id ON schedules(bus_id);');
@@ -107,6 +118,7 @@ async function initDatabase(pool) {
         await client.query('CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);');
         await client.query('CREATE INDEX IF NOT EXISTS idx_seats_bus_id ON seats(bus_id);');
         await client.query('CREATE INDEX IF NOT EXISTS idx_routes_origin_destination ON routes(origin, destination);');
+        await client.query('CREATE INDEX IF NOT EXISTS idx_holds_expires_at ON holds(expires_at);');
 
         console.log('Tablas e índices creados o ya existentes.');
         await insertSampleData(client);

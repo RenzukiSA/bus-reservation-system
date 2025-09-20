@@ -5,6 +5,8 @@ let selectedSeats = [];
 let seatMap = [];
 let reservationType = 'seats';
 let countdownTimer = null;
+let holdCountdownTimer = null;
+let currentHold = null;
 
 // API Base URL
 const API_BASE = '/api';
@@ -91,19 +93,17 @@ function setupEventListeners() {
     });
 
     // Back to results
-    document.getElementById('backToResults').addEventListener('click', function() {
+    document.getElementById('backToResults').addEventListener('click', async function() {
         seatSelection.classList.add('hidden');
         searchResults.classList.remove('hidden');
+        // Si el usuario vuelve atrás, liberamos el hold
+        if (currentHold) {
+            await releaseHold();
+        }
     });
 
     // Proceed to reservation
-    document.getElementById('proceedToReservation').addEventListener('click', function() {
-        if (reservationType === 'seats' && selectedSeats.length === 0) {
-            alert('Por favor selecciona al menos un asiento');
-            return;
-        }
-        showReservationForm();
-    });
+    document.getElementById('proceedToReservation').addEventListener('click', handleCreateHold);
 
     // Customer form
     document.getElementById('customerForm').addEventListener('submit', handleReservation);
@@ -448,20 +448,75 @@ function showReservationForm() {
     
     seatSelection.classList.add('hidden');
     reservationForm.classList.remove('hidden');
+    document.getElementById('holdTimer').style.display = 'block';
+}
+
+async function handleCreateHold() {
+    if (reservationType === 'seats' && selectedSeats.length === 0) {
+        alert('Por favor selecciona al menos un asiento');
+        return;
+    }
+
+    const holdData = {
+        schedule_id: selectedSchedule.schedule_id,
+        reservation_date: travelDateInput.value,
+        selected_seats: selectedSeats
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/holds`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(holdData)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'No se pudieron reservar los asientos temporalmente.');
+        }
+
+        currentHold = {
+            id: result.hold_id,
+            expires_at: new Date(result.expires_at)
+        };
+
+        startHoldCountdown(currentHold.expires_at);
+        showReservationForm();
+
+    } catch (error) {
+        console.error('Error creating hold:', error);
+        showError(error.message);
+    }
+}
+
+async function releaseHold() {
+    if (!currentHold) return;
+    try {
+        await fetch(`${API_BASE}/holds/${currentHold.id}`, { method: 'DELETE' });
+        console.log(`Hold ${currentHold.id} released.`);
+    } catch (error) {
+        console.error('Error releasing hold:', error);
+    }
+    currentHold = null;
+    if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+    document.getElementById('holdTimer').style.display = 'none';
 }
 
 async function handleReservation(e) {
     e.preventDefault();
     
+    if (!currentHold) {
+        showError('Tu sesión ha expirado. Por favor, selecciona los asientos de nuevo.');
+        // Aquí podrías redirigir o resetear la vista
+        return;
+    }
+
     const customerName = document.getElementById('customerName').value;
     const customerPhone = document.getElementById('customerPhone').value;
     const customerEmail = document.getElementById('customerEmail').value;
     
     const reservationData = {
-        schedule_id: selectedSchedule.schedule_id,
-        reservation_date: travelDateInput.value,
-        reservation_type: reservationType,
-        selected_seats: reservationType === 'seats' ? selectedSeats : null,
+        hold_id: currentHold.id,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_email: customerEmail
@@ -479,6 +534,10 @@ async function handleReservation(e) {
         const result = await response.json();
         
         if (response.ok) {
+            // Detener el contador del hold y limpiar el estado
+            if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+            currentHold = null;
+
             showPaymentInstructions(result);
         } else {
             showError(result.error || 'Error al crear la reserva');
@@ -503,6 +562,33 @@ function showPaymentInstructions(data) {
 
     reservationForm.classList.add('hidden');
     paymentInstructions.classList.remove('hidden');
+}
+
+function startHoldCountdown(deadline) {
+    const countdownElement = document.getElementById('holdCountdown');
+    document.getElementById('holdTimer').style.display = 'block';
+
+    if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+
+    holdCountdownTimer = setInterval(() => {
+        const now = new Date().getTime();
+        const distance = deadline.getTime() - now;
+
+        if (distance < 0) {
+            clearInterval(holdCountdownTimer);
+            countdownElement.textContent = 'EXPIRADO';
+            showError('Tu tiempo para reservar ha expirado. Por favor, intenta de nuevo.');
+            // Aquí podrías resetear la vista para que el usuario empiece de nuevo
+            releaseHold();
+            // Opcional: recargar la página o volver a la selección de asientos
+            return;
+        }
+
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
 }
 
 function startCountdown(deadline) {

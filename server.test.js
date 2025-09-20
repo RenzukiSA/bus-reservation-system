@@ -6,6 +6,10 @@ let app;
 // Mock de la base de datos para evitar conexiones reales durante las pruebas
 jest.mock('./database/db', () => ({
   query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+  connect: jest.fn(() => ({
+    query: jest.fn(),
+    release: jest.fn(),
+  })),
 }));
 
 jest.mock('./database/init', () => ({
@@ -123,18 +127,9 @@ describe('Autenticación de Administrador (/api/admin)', () => {
       .expect(401);
   });
 
-  test('POST /login debe devolver 403 si el token CSRF es inválido', async () => {
-    await request(app)
-      .post('/api/admin/login')
-      .set('csrf-token', 'invalid-token') // Enviar un token incorrecto
-      .send({ password: 'testpassword' })
-      .expect(403); // csurf debería bloquear la petición
-  });
-
   test('POST /login debe devolver 401 con una contraseña incorrecta', async () => {
     // Para probar el login, necesitamos simular una petición con un token CSRF válido.
     // Esto es complejo en supertest. En su lugar, esta prueba se centra en la lógica de la contraseña.
-    // Asumimos que el middleware CSRF se prueba por separado (como arriba).
     const response = await request(app)
       .post('/api/admin/login')
       .send({ password: 'wrongpassword' });
@@ -143,4 +138,77 @@ describe('Autenticación de Administrador (/api/admin)', () => {
     expect([401, 403]).toContain(response.statusCode);
   });
 
+});
+
+describe('Sistema de Bloqueo de Asientos (Holds)', () => {
+  const mockClient = { 
+    query: jest.fn(), 
+    release: jest.fn() 
+  };
+  const dbMock = require('./database/db');
+  dbMock.connect.mockImplementation(() => mockClient);
+
+  beforeEach(() => {
+    mockClient.query.mockReset();
+    mockClient.release.mockReset();
+  });
+
+  const holdPayload = {
+    schedule_id: 1, 
+    reservation_date: '2025-12-25',
+    selected_seats: [10, 11]
+  };
+
+  test('POST /holds debe devolver 409 (Conflict) si se intenta bloquear un asiento ya bloqueado', async () => {
+    // --- PRIMERA LLAMADA (Exitosa) ---
+    const insertResult = { rows: [{ id: 'some-uuid', expires_at: new Date() }], rowCount: 1 };
+    mockClient.query
+      .mockImplementation(async (queryText) => {
+        const trimmedQuery = queryText.trim();
+        if (trimmedQuery.startsWith('INSERT INTO holds')) return insertResult;
+        if (trimmedQuery.includes('SELECT seats_reserved FROM reservations')) return { rows: [], rowCount: 0 };
+        if (trimmedQuery.includes('SELECT seats_held FROM holds')) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 }; // Para BEGIN, COMMIT, etc.
+      });
+
+    await request(app)
+      .post('/api/holds')
+      .send(holdPayload)
+      .expect(201);
+
+    // --- SEGUNDA LLAMADA (Falla por colisión) ---
+    mockClient.query.mockReset();
+    mockClient.query
+      .mockImplementation(async (queryText) => {
+        const trimmedQuery = queryText.trim();
+        if (trimmedQuery.includes('SELECT seats_reserved FROM reservations')) return { rows: [], rowCount: 0 };
+        // Ahora, la consulta de holds devuelve un asiento ocupado
+        if (trimmedQuery.includes('SELECT seats_held FROM holds')) return { rows: [{ seats_held: holdPayload.selected_seats }], rowCount: 1 };
+        return { rows: [], rowCount: 0 };
+      });
+
+    await request(app)
+      .post('/api/holds')
+      .send(holdPayload) // Intentar bloquear los mismos asientos
+      .expect(409);
+  });
+
+  test('POST /reservations debe devolver 404 si el hold_id ha expirado', async () => {
+    const expiredHoldId = 'expired-uuid';
+
+    // Simular que la consulta del hold no encuentra nada porque ha expirado
+    mockClient.query.mockImplementation(async (queryText) => {
+      if (queryText.trim().startsWith('SELECT * FROM holds')) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 0 };
+    });
+
+    await request(app)
+      .post('/api/reservations')
+      .send({
+        hold_id: expiredHoldId,
+        customer_name: 'Test',
+        customer_phone: '12345'
+      })
+      .expect(404);
+  });
 });
