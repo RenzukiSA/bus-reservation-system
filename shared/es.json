@@ -1,0 +1,25 @@
+{
+  "invalid_type": "El tipo de dato es inválido.",
+  "invalid_string": {
+    "email": "El formato del email no es válido.",
+    "uuid": "El formato del ID no es válido."
+  },
+  "too_small": {
+    "string": {
+      "exact": "Debe contener exactamente {minimum} caracter(es)",
+      "inclusive": "Debe contener al menos {minimum} caracter(es)",
+      "not_inclusive": "Debe contener más de {minimum} caracter(es)"
+    }
+  },
+  "too_big": {
+    "string": {
+      "exact": "Debe contener exactamente {maximum} caracter(es)",
+      "inclusive": "Debe contener como máximo {maximum} caracter(es)",
+      "not_inclusive": "Debe contener menos de {maximum} caracter(es)"
+    }
+  },
+  "custom": {
+    "invalid_date": "La fecha proporcionada no es válida.",
+    "phone_format": "El formato del teléfono no es válido. Use solo números y guiones."
+  }
+}

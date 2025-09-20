@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    /* Basic Options */
+    "target": "es2020",
+    "module": "commonjs",
+    "lib": ["es2020", "dom"],
+    "allowJs": true, // Permitir archivos JavaScript
+    "checkJs": false, // No verificar errores en archivos JS existentes
+    "outDir": "./dist",
+    "rootDir": "./",
+    "resolveJsonModule": true, // Permitir importar archivos JSON
+
+    /* Strict Type-Checking Options */
+    "strict": true,
+
+    /* Module Resolution Options */
+    "moduleResolution": "node",
+    "esModuleInterop": true, // Permite `import React from 'react'`
+
+    /* Advanced Options */
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

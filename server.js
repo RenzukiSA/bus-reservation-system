@@ -15,7 +15,6 @@ if (!IS_PROD) {
 
 // --- Importaciones de la Aplicación ---
 const pool = require('./database/db');
-const { initDatabase } = require('./database/init');
 const busRoutes = require('./routes/buses');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
@@ -26,7 +25,6 @@ const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // --- Middleware de Seguridad y Rendimiento ---
 
@@ -95,7 +93,7 @@ app.use((req, res, next) => {
 // --- Configuración de Middleware y Rutas ---
 
 // Confiar en el proxy de Render para que `secure: true` en cookies funcione
-if (IS_PROD) {
+if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
 
@@ -113,7 +111,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: IS_PROD, // `true` solo en producción
+        secure: process.env.NODE_ENV === 'production', // `true` solo en producción
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 horas
         sameSite: 'lax'
@@ -162,30 +160,4 @@ app.use((err, req, res, next) => {
   }
 });
 
-// --- Inicialización del Servidor ---
-
-async function startServer() {
-    try {
-        await initDatabase(pool);
-        console.log('Base de datos inicializada correctamente.');
-        return app; // Devolver la app configurada
-
-    } catch (error) {
-        console.error('Error fatal al iniciar el servidor:', error);
-        process.exit(1);
-    }
-}
-
-// Exportar una promesa que se resuelve con la app lista
-const appPromise = startServer();
-
-// Iniciar el servidor solo si el archivo se ejecuta directamente
-if (require.main === module) {
-    appPromise.then(app => {
-        app.listen(PORT, () => {
-            console.log(`Servidor corriendo en el puerto ${PORT}`);
-        });
-    });
-}
-
-module.exports = appPromise;
+module.exports = app;

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4, validate: uuidValidate } = require('uuid');
 const pool = require('../database/db');
+const { validate } = require('../middleware/validate');
+const { CreateReservationSchema } = require('../shared/validation');
 
 // Middleware para validar que el ID de la reserva es un UUID válido
 const validateReservationId = (req, res, next) => {
@@ -13,17 +15,13 @@ const validateReservationId = (req, res, next) => {
 };
 
 // Create a new reservation from a hold
-router.post('/', async (req, res) => {
+router.post('/', validate('body', CreateReservationSchema), async (req, res) => {
     const {
         hold_id,
         customer_name,
         customer_phone,
         customer_email
     } = req.body;
-
-    if (!hold_id || !customer_name || !customer_phone) {
-        return res.status(400).json({ error: 'Faltan campos requeridos: hold_id, nombre y teléfono.' });
-    }
 
     const client = await pool.connect();
     try {
