@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 initDatabase(pool)
     .then(() => {
         console.log('Base de datos inicializada correctamente.');
-        app.listen(PORT, () => {
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`Servidor escuchando en el puerto ${PORT}`);
         });
     })
@@ -22,4 +22,3 @@ initDatabase(pool)
         console.error('Error fatal al iniciar el servidor:', error);
         process.exit(1);
     });
-    

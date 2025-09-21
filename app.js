@@ -107,6 +107,9 @@ app.use('/api/buses', busRoutes);
 app.use('/api/routes', routesRoutes);
 app.use('/api/holds', holdsRoutes);
 
+// Healthcheck endpoint
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+
 app.use((err, req, res, next) => {
     if (err.code === 'EBADCSRFTOKEN') {
         console.warn(`Intento de CSRF bloqueado desde la IP: ${req.ip}`);
