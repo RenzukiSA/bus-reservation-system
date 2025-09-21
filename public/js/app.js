@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const noResults = document.getElementById('results-initial-state');
     const seatSelection = document.getElementById('seat-selection-view');
     const seatMapContainer = document.getElementById('seatMap');
-    const reservationForm = document.getElementById('reservationForm');
+    const reservationForm = document.getElementById('checkout-view'); // CORRECCIÓN
     const paymentInstructions = document.getElementById('paymentInstructions');
 
     // --- Auth DOM Elements ---
@@ -45,7 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setBookingStep(stepToShow) {
         bookingSteps.forEach(step => {
-            step.classList.toggle('is-hidden', step !== stepToShow);
+            // Si stepToShow es null, todos se ocultan.
+            // Si stepToShow es un elemento, solo él se muestra.
+            const shouldBeHidden = (step !== stepToShow);
+            if (step) { // Añadimos una guarda para evitar errores si un elemento del array fuera nulo
+                step.classList.toggle('is-hidden', shouldBeHidden);
+            }
         });
     }
 
@@ -687,24 +692,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========================================
-// SISTEMA DE INICIALIZACIÓN A PRUEBA DE FALLOS
+// CAPTURADORES DE ERRORES GLOBALES
 // ========================================
-(function init(){
-    try {
-        if (typeof window.setView === 'function') {
-            window.setView('home');
-        } else {
-            document.querySelectorAll('[data-view]').forEach(s=>{
-                s.classList.toggle('is-hidden', s.dataset.view !== 'home');
-            });
-        }
-    } catch (e) {
-        console.error('init error', e);
-        document.querySelectorAll('[data-view]').forEach(s=>{
-            s.classList.toggle('is-hidden', s.dataset.view !== 'home');
-        });
-    }
-})();
+window.onerror = (m,s,l,c,e)=>console.error('window.onerror', m,s,l,c,e);
+window.onunhandledrejection = ev=>console.error('unhandled', ev.reason);
 
 // ========================================
 // DELEGACIÓN PARA SELECCIÓN DE ASIENTOS
@@ -744,9 +735,3 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
     });
 });
-
-// ========================================
-// CAPTURADORES DE ERRORES GLOBALES
-// ========================================
-window.onerror = (m,s,l,c,e)=>console.error('window.onerror', m,s,l,c,e);
-window.onunhandledrejection = ev=>console.error('unhandled', ev.reason);
