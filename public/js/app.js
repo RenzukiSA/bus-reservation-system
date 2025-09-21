@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loading = document.getElementById('loading');
     const schedulesList = document.getElementById('schedulesList');
     const seatMapContainer = document.getElementById('seatMap');
+    const resultsInitialState = document.getElementById('results-initial-state');
     
     // =========================================================================
     // VIEW CONTROLLER
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadRoutes();
         setMinDate();
         setView('home');
+        resultsInitialState.classList.remove('is-hidden'); // Mostrar estado inicial
     }
 
     // =========================================================================
@@ -583,6 +585,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
     function showLoading() {
         loading.classList.remove('is-hidden');
+        schedulesList.innerHTML = ''; // Limpiar resultados anteriores
+        resultsInitialState.classList.add('is-hidden'); // Ocultar estado inicial
     }
 
     function hideLoading() {
