@@ -67,6 +67,12 @@ Para desplegar esta aplicación en un servicio como [Render](https://render.com/
     *   `ADMIN_PASSWORD`
     *   `NODE_ENV` (con el valor `production`)
 
+## Archivos Estáticos
+
+-   **Rutas en el navegador**: Todos los archivos estáticos (CSS, JS del cliente, imágenes) se sirven bajo el prefijo `/public`. Por ejemplo, para acceder al archivo de estilos principal, la URL es `/public/css/styles.css`.
+-   **Ubicación de los archivos fuente**: Los archivos que se deben editar están en la carpeta `public/` en la raíz del proyecto.
+-   **Nota sobre la compilación**: La configuración de Express (`express.static(path.join(__dirname, 'public'))`) funciona tanto en desarrollo como en producción. En desarrollo, `__dirname` es la raíz del proyecto. En producción, el script `postbuild` copia la carpeta `public` dentro de `dist`, y como el servidor se ejecuta desde `dist`, `__dirname` apunta a `dist`, encontrando la carpeta `public` correctamente en su interior.
+
 ## Estructura del proyecto
 
 ```
