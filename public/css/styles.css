@@ -428,6 +428,48 @@ body {
 .seat-demo.occupied { background: #e0e0e0; border-color: #bdbdbd; }
 .seat-demo.premium { background: var(--premium-color); border-color: #f8c700; }
 
+/* Seatmap Legend & Live Total */
+.seat-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    border-top: 1px solid #eee;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.seat-demo {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.live-total-container {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+.total-local {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.total-usd {
+    font-size: 0.9rem;
+    color: #666;
+}
+
 /* --- Footer --- */
 .footer {
     background: #333;
