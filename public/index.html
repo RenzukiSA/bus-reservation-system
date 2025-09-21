@@ -29,13 +29,26 @@
                     <span>Mis Reservas</span>
                 </a>
             </li>
-            <li class="menu-item">
-                <a href="#admin" class="nav-link">
-                    <i class="fas fa-user-shield"></i>
-                    <span>Admin</span>
-                </a>
-            </li>
         </ul>
+        <!-- Controles de Sesión de Usuario -->
+        <div class="user-session-controls">
+            <a href="/admin" id="admin-link" class="nav-link is-hidden">
+                <i class="fas fa-user-shield"></i>
+                <span>Admin</span>
+            </a>
+            <div id="user-info" class="user-info is-hidden">
+                <i class="fas fa-user-circle"></i>
+                <span id="user-name"></span>
+            </div>
+            <a href="/login" id="login-link" class="nav-link">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>Iniciar Sesión</span>
+            </a>
+            <a href="#" id="logout-link" class="nav-link is-hidden">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
     </nav>
 
     <!-- Mobile Menu Toggle -->

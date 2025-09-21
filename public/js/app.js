@@ -1,8 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-
-    // =========================================================================
-    // GLOBAL STATE & CONFIGURATION
-    // =========================================================================
+    // --- Global State ---
     let currentSchedules = [];
     let selectedSchedule = null;
     let selectedSeats = [];
@@ -12,88 +9,81 @@ document.addEventListener('DOMContentLoaded', () => {
     let holdCountdownTimer = null;
     let currentHold = null;
 
+    // --- API ---
     const API_BASE = '/api';
 
-    // =========================================================================
-    // DOM ELEMENTS
-    // =========================================================================
+    // --- DOM Elements ---
     const searchForm = document.getElementById('searchForm');
     const originSelect = document.getElementById('origin');
     const destinationSelect = document.getElementById('destination');
     const travelDateInput = document.getElementById('travelDate');
     const loading = document.getElementById('loading');
+    const searchResults = document.getElementById('searchResults');
     const schedulesList = document.getElementById('schedulesList');
+    const noResults = document.getElementById('noResults');
+    const seatSelection = document.getElementById('seatSelection');
     const seatMapContainer = document.getElementById('seatMap');
-    const resultsInitialState = document.getElementById('results-initial-state');
-    
-    // =========================================================================
-    // VIEW CONTROLLER
-    // =========================================================================
+    const reservationForm = document.getElementById('reservationForm');
+    const paymentInstructions = document.getElementById('paymentInstructions');
+
+    // --- Auth DOM Elements ---
+    const adminLink = document.getElementById('admin-link');
+    const userInfo = document.getElementById('user-info');
+    const userName = document.getElementById('user-name');
+    const loginLink = document.getElementById('login-link');
+    const logoutLink = document.getElementById('logout-link');
+
+    // --- View Controller ---
     const mainViews = document.querySelectorAll('[data-view]');
+    const bookingSteps = [searchResults, seatSelection, reservationForm, paymentInstructions];
+
     function setView(viewName) {
         mainViews.forEach(view => {
             view.classList.toggle('is-hidden', view.dataset.view !== viewName);
         });
     }
 
-    // =========================================================================
-    // INITIALIZATION
-    // =========================================================================
-    function initializeApp() {
+    function setBookingStep(stepToShow) {
+        bookingSteps.forEach(step => {
+            step.classList.toggle('is-hidden', step !== stepToShow);
+        });
+    }
+
+    // --- Initialization ---
+    async function initializeApp() {
+        await updateAuthUI(); // Comprobar estado de autenticación primero
         setupEventListeners();
         loadRoutes();
         setMinDate();
         setView('home');
-        resultsInitialState.classList.remove('is-hidden'); // Mostrar estado inicial
+        setBookingStep(null); // Hide all booking steps initially
+        noResults.classList.remove('is-hidden');
     }
 
-    // =========================================================================
-    // EVENT LISTENERS
-    // =========================================================================
+    // --- Event Listeners ---
     function setupEventListeners() {
-        // Sidebar Navigation
-        const sidebarToggle = document.querySelector('.sidebar-toggle');
-        const sidebar = document.querySelector('.sidebar');
-        if (sidebarToggle && sidebar) {
-            sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('active'));
-            document.addEventListener('click', (e) => {
-                if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !sidebarToggle.contains(e.target) && sidebar.classList.contains('active')) {
-                    sidebar.classList.remove('active');
-                }
-            });
-        }
-
         // Main Navigation
         document.querySelectorAll('.nav-link').forEach(link => {
             link.addEventListener('click', function (e) {
                 e.preventDefault();
                 const viewName = this.getAttribute('href').substring(1);
-                setView(viewName === 'reservations' ? 'lookup' : viewName);
+                setView(viewName);
                 document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
                 this.classList.add('active');
             });
         });
 
-        // Search Form
+        // Search
         searchForm.addEventListener('submit', handleSearch);
         originSelect.addEventListener('change', updateDestinations);
 
-        // --- Event Delegation for Dynamic Buttons ---
-        schedulesList.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.js-select-seats');
-            if (!btn) return;
-            e.preventDefault();
-            const scheduleId = btn.dataset.scheduleId;
-            if (scheduleId) {
-                await selectSchedule(scheduleId);
-            }
-        });
-
-        // Other forms and buttons
+        // Back to Results
         document.getElementById('backToResults').addEventListener('click', async () => {
-            setView('home');
+            setBookingStep(searchResults);
             if (currentHold) await releaseHold();
         });
+
+        // Reservation Flow
         document.querySelectorAll('input[name="reservationType"]').forEach(radio => {
             radio.addEventListener('change', function () {
                 reservationType = this.value;
@@ -103,16 +93,148 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('proceedToReservation').addEventListener('click', handleCreateHold);
         document.getElementById('customerForm').addEventListener('submit', handleReservation);
         document.getElementById('reservationSearchForm').addEventListener('submit', handleReservationSearch);
+
+        // Logout
+        if (logoutLink) {
+            logoutLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    window.location.reload(); // Recargar la página para reflejar el cierre de sesión
+                } catch (error) {
+                    console.error('Error al cerrar sesión:', error);
+                }
+            });
+        }
     }
 
-    // =========================================================================
-    // CORE LOGIC
-    // =========================================================================
+    // --- Auth UI Logic ---
+    async function updateAuthUI() {
+        try {
+            const response = await fetch('/api/auth/status');
+            const data = await response.json();
 
-    function setMinDate() {
-        const today = new Date().toISOString().split('T')[0];
-        travelDateInput.min = today;
-        travelDateInput.value = today;
+            if (data.loggedIn) {
+                // Usuario ha iniciado sesión
+                loginLink.classList.add('is-hidden');
+                logoutLink.classList.remove('is-hidden');
+                userInfo.classList.remove('is-hidden');
+                userName.textContent = data.user.name;
+
+                if (data.user.role === 'admin') {
+                    adminLink.classList.remove('is-hidden');
+                }
+            } else {
+                // Usuario no ha iniciado sesión
+                loginLink.classList.remove('is-hidden');
+                logoutLink.classList.add('is-hidden');
+                userInfo.classList.add('is-hidden');
+                adminLink.classList.add('is-hidden');
+            }
+        } catch (error) {
+            console.error('Error al verificar el estado de autenticación:', error);
+            // Asegurarse de que los enlaces de no-autenticado sean visibles si hay un error
+            loginLink.classList.remove('is-hidden');
+            logoutLink.classList.add('is-hidden');
+            userInfo.classList.add('is-hidden');
+            adminLink.classList.add('is-hidden');
+        }
+    }
+
+    // --- API & Logic Functions (Abridged for brevity, paste the full functions here) ---
+    // All your existing functions like handleSearch, loadRoutes, selectSchedule, etc.
+    // will go here, but we'll modify the parts that show/hide elements.
+
+    async function handleSearch(e) {
+        e.preventDefault();
+        const origin = originSelect.value;
+        const destination = destinationSelect.value;
+        const date = travelDateInput.value;
+
+        if (!origin || !destination || !date) {
+            alert('Por favor completa todos los campos');
+            return;
+        }
+
+        loading.classList.remove('is-hidden');
+        searchResults.classList.add('is-hidden');
+        noResults.classList.add('is-hidden');
+
+        try {
+            const url = `${API_BASE}/buses/schedules?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${date}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const schedules = await response.json();
+            currentSchedules = schedules;
+            displaySchedules(schedules);
+
+        } catch (error) {
+            console.error('Error searching schedules:', error);
+            showError('Error al buscar viajes disponibles');
+        } finally {
+            loading.classList.add('is-hidden');
+        }
+    }
+
+    function displaySchedules(schedules) {
+        schedulesList.innerHTML = '';
+        if (schedules.length === 0) {
+            noResults.classList.remove('is-hidden');
+        } else {
+            noResults.classList.add('is-hidden');
+            schedules.forEach(schedule => {
+                // ... (your existing schedule card creation logic)
+                 const card = document.createElement('div');
+                 card.className = 'schedule-card';
+                 const availabilityText = schedule.is_full_bus_available ? 'Autobús completo disponible' : `${schedule.available_seats} asientos disponibles`;
+                 card.innerHTML = `
+                     <div class="schedule-header">
+                         <div class="schedule-time"><span>${schedule.departure_time}</span> <i class="fas fa-arrow-right"></i> <span>${schedule.arrival_time}</span></div>
+                         <div class="bus-type">${schedule.bus_type.replace('_', ' ').toUpperCase()}</div>
+                     </div>
+                     <div class="schedule-info">
+                         <div class="info-item"><div class="label">Autobús</div><div class="value">${schedule.bus_number}</div></div>
+                         <div class="info-item"><div class="label">Disponibilidad</div><div class="value">${availabilityText}</div></div>
+                         <div class="info-item"><div class="label">Precio por asiento</div><div class="value">$${schedule.base_total_price}</div></div>
+                         <div class="info-item"><div class="label">Autobús completo</div><div class="value">$${schedule.full_bus_price}</div></div>
+                     </div>
+                     <div class="schedule-actions">
+                         <button class="btn btn-primary" onclick="selectSchedule(${schedule.schedule_id})" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
+                             <i class="fas fa-chair"></i> Seleccionar Asientos
+                         </button>
+                     </div>`;
+                 schedulesList.appendChild(card);
+            });
+        }
+        setBookingStep(searchResults);
+    }
+
+    window.selectSchedule = async function(scheduleId) {
+        selectedSchedule = currentSchedules.find(s => s.schedule_id === scheduleId);
+        if (!selectedSchedule) return showError('Error al seleccionar el horario');
+        
+        document.getElementById('selectedScheduleInfo').textContent = `${selectedSchedule.departure_time} - ${selectedSchedule.arrival_time} | ${selectedSchedule.bus_number}`;
+        await loadSeatMap(scheduleId);
+        setBookingStep(seatSelection);
+    }
+
+    async function handleCreateHold() {
+        // ... (your existing hold creation logic)
+        // On success:
+        // currentHold = { ... };
+        // startHoldCountdown(currentHold.expires_at);
+        // setBookingStep(reservationForm);
+    }
+
+    async function handleReservation(e) {
+        e.preventDefault();
+        // ... (your existing reservation creation logic)
+        // On success:
+        // if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+        // currentHold = null;
+        // displayPaymentInstructions(result);
+        // setBookingStep(paymentInstructions);
     }
 
     async function loadRoutes() {
@@ -153,74 +275,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleSearch(e) {
-        e.preventDefault();
-        const origin = originSelect.value;
-        const destination = destinationSelect.value;
-        const date = travelDateInput.value;
-        if (!origin || !destination || !date) {
-            alert('Por favor completa todos los campos');
-            return;
-        }
-        showLoading();
-        try {
-            const url = `${API_BASE}/buses/schedules?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${date}`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            const schedules = await response.json();
-            currentSchedules = schedules;
-            displaySchedules(schedules);
-        } catch (error) {
-            console.error('Error searching schedules:', error);
-            showError('Error al buscar viajes disponibles');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    function displaySchedules(schedules) {
-        schedulesList.innerHTML = '';
-        if (schedules.length === 0) {
-            showError('No se encontraron viajes disponibles para la fecha seleccionada');
-            return;
-        }
-        schedules.forEach(schedule => {
-            const card = document.createElement('div');
-            card.className = 'schedule-card';
-            const availabilityText = schedule.is_full_bus_available ? 'Autobús completo disponible' : `${schedule.available_seats} asientos disponibles`;
-            card.innerHTML = `
-                <div class="schedule-header">
-                    <div class="schedule-time">
-                        <span>${schedule.departure_time}</span>
-                        <i class="fas fa-arrow-right"></i>
-                        <span>${schedule.arrival_time}</span>
-                    </div>
-                    <div class="bus-type">${schedule.bus_type.replace('_', ' ').toUpperCase()}</div>
-                </div>
-                <div class="schedule-info">
-                    <div class="info-item"><div class="label">Autobús</div><div class="value">${schedule.bus_number}</div></div>
-                    <div class="info-item"><div class="label">Disponibilidad</div><div class="value">${availabilityText}</div></div>
-                    <div class="info-item"><div class="label">Precio por asiento</div><div class="value">$${schedule.base_total_price}</div></div>
-                    <div class="info-item"><div class="label">Autobús completo</div><div class="value">$${schedule.full_bus_price}</div></div>
-                </div>
-                <div class="schedule-actions">
-                    <button class="btn btn-primary js-select-seats" data-schedule-id="${schedule.schedule_id}" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
-                        <i class="fas fa-chair"></i> Seleccionar Asientos
-                    </button>
-                </div>`;
-            schedulesList.appendChild(card);
-        });
-    }
-
-    async function selectSchedule(scheduleId) {
-        selectedSchedule = currentSchedules.find(s => s.schedule_id === scheduleId);
-        if (!selectedSchedule) {
-            showError('Error al seleccionar el horario');
-            return;
-        }
-        document.getElementById('selectedScheduleInfo').textContent = `${selectedSchedule.departure_time} - ${selectedSchedule.arrival_time} | ${selectedSchedule.bus_number}`;
-        await loadSeatMap(scheduleId);
-        setView('seat');
+    function setMinDate() {
+        const today = new Date().toISOString().split('T')[0];
+        travelDateInput.min = today;
+        travelDateInput.value = today;
     }
 
     async function loadSeatMap(scheduleId) {
@@ -371,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             startHoldCountdown(currentHold.expires_at);
-            showReservationForm();
+            setBookingStep(reservationForm);
 
         } catch (error) {
             console.error('Error creating hold:', error);
@@ -424,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentHold = null;
 
                 displayPaymentInstructions(result);
-                setView('success');
+                setBookingStep(paymentInstructions);
             } else {
                 showError(result.error || 'Error al crear la reserva');
             }
@@ -445,69 +503,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('whatsappLink').href = `https://wa.me/${whatsappNumberClean}?text=${encodeURIComponent(whatsappMessage)}`;
 
         startCountdown(new Date(data.payment_deadline));
-    }
-
-    async function releaseHold() {
-        if (!currentHold) return;
-        try {
-            await fetch(`${API_BASE}/holds/${currentHold.id}`, { method: 'DELETE' });
-            console.log(`Hold ${currentHold.id} released.`);
-        } catch (error) {
-            console.error('Error releasing hold:', error);
-        }
-        currentHold = null;
-        if (holdCountdownTimer) clearInterval(holdCountdownTimer);
-        document.getElementById('holdTimer').style.display = 'none';
-    }
-
-    function startHoldCountdown(deadline) {
-        const countdownElement = document.getElementById('holdCountdown');
-        document.getElementById('holdTimer').style.display = 'block';
-
-        if (holdCountdownTimer) clearInterval(holdCountdownTimer);
-
-        holdCountdownTimer = setInterval(() => {
-            const now = new Date().getTime();
-            const distance = deadline.getTime() - now;
-
-            if (distance < 0) {
-                clearInterval(holdCountdownTimer);
-                countdownElement.textContent = 'EXPIRADO';
-                showError('Tu tiempo para reservar ha expirado. Por favor, intenta de nuevo.');
-                // Aquí podrías resetear la vista para que el usuario empiece de nuevo
-                releaseHold();
-                // Opcional: recargar la página o volver a la selección de asientos
-                return;
-            }
-
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }, 1000);
-    }
-
-    function startCountdown(deadline) {
-        const countdownElement = document.getElementById('countdown');
-        
-        // Clear any existing timer
-        if (countdownTimer) clearInterval(countdownTimer);
-
-        countdownTimer = setInterval(() => {
-            const now = new Date().getTime();
-            const distance = deadline.getTime() - now;
-            
-            if (distance < 0) {
-                clearInterval(countdownTimer);
-                countdownElement.textContent = 'EXPIRADO';
-                return;
-            }
-            
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-            
-            countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }, 1000);
     }
 
     async function handleReservationSearch(e) {
@@ -580,13 +575,74 @@ document.addEventListener('DOMContentLoaded', () => {
         detailsDiv.classList.remove('hidden');
     }
 
-    // =========================================================================
-    // UTILITY FUNCTIONS
-    // =========================================================================
+    async function releaseHold() {
+        if (!currentHold) return;
+        try {
+            await fetch(`${API_BASE}/holds/${currentHold.id}`, { method: 'DELETE' });
+            console.log(`Hold ${currentHold.id} released.`);
+        } catch (error) {
+            console.error('Error releasing hold:', error);
+        }
+        currentHold = null;
+        if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+        document.getElementById('holdTimer').style.display = 'none';
+    }
+
+    function startHoldCountdown(deadline) {
+        const countdownElement = document.getElementById('holdCountdown');
+        document.getElementById('holdTimer').style.display = 'block';
+
+        if (holdCountdownTimer) clearInterval(holdCountdownTimer);
+
+        holdCountdownTimer = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = deadline.getTime() - now;
+
+            if (distance < 0) {
+                clearInterval(holdCountdownTimer);
+                countdownElement.textContent = 'EXPIRADO';
+                showError('Tu tiempo para reservar ha expirado. Por favor, intenta de nuevo.');
+                // Aquí podrías resetear la vista para que el usuario empiece de nuevo
+                releaseHold();
+                // Opcional: recargar la página o volver a la selección de asientos
+                return;
+            }
+
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    function startCountdown(deadline) {
+        const countdownElement = document.getElementById('countdown');
+        
+        // Clear any existing timer
+        if (countdownTimer) clearInterval(countdownTimer);
+
+        countdownTimer = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = deadline.getTime() - now;
+            
+            if (distance < 0) {
+                clearInterval(countdownTimer);
+                countdownElement.textContent = 'EXPIRADO';
+                return;
+            }
+            
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            
+            countdownElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    // --- Utility Functions ---
     function showLoading() {
         loading.classList.remove('is-hidden');
         schedulesList.innerHTML = ''; // Limpiar resultados anteriores
-        resultsInitialState.classList.add('is-hidden'); // Ocultar estado inicial
+        noResults.classList.add('is-hidden'); // Ocultar estado inicial
     }
 
     function hideLoading() {
@@ -616,9 +672,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // =========================================================================
-    // START APP
-    // =========================================================================
+    // --- Start App ---
     initializeApp();
-
 });

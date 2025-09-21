@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
 async function initDatabase(pool) {
     console.log('Conectando a la base de datos PostgreSQL...');
@@ -111,6 +112,19 @@ async function initDatabase(pool) {
             );
         `);
 
+        // Crear tabla de usuarios
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'user', -- 'user' or 'admin'
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
+
         // --- ÍNDICES PARA MEJORAR EL RENDIMIENTO ---
         await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_route_id ON schedules(route_id);');
         await client.query('CREATE INDEX IF NOT EXISTS idx_schedules_bus_id ON schedules(bus_id);');
@@ -136,10 +150,15 @@ async function insertSampleData(client) {
         const res = await client.query('SELECT COUNT(*) FROM buses');
         if (res.rows[0].count > 0) {
             console.log('Los datos de ejemplo ya existen. Omitiendo inserción.');
+            // Asegurarse de que el admin exista incluso si los otros datos ya están
+            await insertAdminUser(client);
             return;
         }
 
         console.log('Insertando datos de ejemplo...');
+
+        // Insertar usuario administrador
+        await insertAdminUser(client);
 
         // Insertar buses y asientos
         const buses = [
@@ -188,6 +207,21 @@ async function insertSampleData(client) {
         console.log('Datos de ejemplo insertados correctamente.');
     } catch (err) {
         console.error('Error al insertar datos de ejemplo:', err.stack);
+    }
+}
+
+// Función para insertar el usuario admin si no existe
+async function insertAdminUser(client) {
+    const adminCheck = await client.query('SELECT COUNT(*) FROM users WHERE email = $1', ['admin@example.com']);
+    if (adminCheck.rows[0].count === '0') {
+        console.log('Creando usuario administrador...');
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash('admin123', saltRounds);
+        await client.query(
+            'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+            ['Admin User', 'admin@example.com', hashedPassword, 'admin']
+        );
+        console.log('Usuario administrador creado con email: admin@example.com y contraseña: admin123');
     }
 }
 
