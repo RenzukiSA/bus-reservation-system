@@ -56,6 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
         loadRoutes();
         setMinDate();
         setView('home');
+        // Asegurarse de que el estado inicial sea el correcto
+        const searchResultsCard = document.querySelector('[data-testid="results-card"]');
+        if (searchResultsCard) {
+            document.getElementById('schedulesList').innerHTML = '';
+            document.getElementById('results-initial-state').classList.remove('is-hidden');
+        }
         setBookingStep(null); // Hide all booking steps initially
         noResults.classList.remove('is-hidden');
     }
