@@ -50,6 +50,11 @@ app.use(express.json());
 // Por lo tanto, la ruta correcta es simplemente 'public' relativa a __dirname.
 app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '7d', etag: true }));
 
+// Añadir una ruta explícita para servir index.html en la raíz
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Endpoint de verificación de assets (solo para desarrollo)
 if (!IS_PROD) {
     app.get('/__assets', (req, res) => {
