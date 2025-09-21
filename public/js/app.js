@@ -8,6 +8,19 @@ let countdownTimer = null;
 let holdCountdownTimer = null;
 let currentHold = null;
 
+// --- View Controller ---
+const views = document.querySelectorAll('[data-view]');
+
+function setView(state) {
+    views.forEach(view => {
+        if (view.dataset.view === state) {
+            view.classList.remove('is-hidden');
+        } else {
+            view.classList.add('is-hidden');
+        }
+    });
+}
+
 // API Base URL
 const API_BASE = '/api';
 
@@ -46,16 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    initializeApp();
     setupEventListeners();
     loadRoutes();
     setMinDate();
+    setView('home'); // Set initial view
 });
-
-function initializeApp() {
-    // Show home section by default
-    showSection('home');
-}
 
 function setupEventListeners() {
     // Navigation
@@ -65,12 +73,12 @@ function setupEventListeners() {
             const sectionId = this.getAttribute('href').substring(1);
 
             if (sectionId === 'admin') {
-                // Redirect to admin page
-                window.location.href = '/admin.html';
-                return;
+                setView('admin');
+            } else if (sectionId === 'reservations') {
+                setView('lookup');
+            } else {
+                setView('home');
             }
-
-            showSection(sectionId);
             
             // Update active nav link
             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -94,8 +102,9 @@ function setupEventListeners() {
 
     // Back to results
     document.getElementById('backToResults').addEventListener('click', async function() {
-        seatSelection.classList.add('hidden');
-        searchResults.classList.remove('hidden');
+        // En lugar de ocultar/mostrar, cambiamos el estado de la vista
+        // Nota: No hay un estado 'results', así que volvemos a 'home' que es donde están los resultados.
+        setView('home');
         // Si el usuario vuelve atrás, liberamos el hold
         if (currentHold) {
             await releaseHold();
@@ -222,6 +231,8 @@ async function handleSearch(e) {
         } else {
             displaySchedules(schedules);
         }
+        // Al buscar, nos aseguramos de que la vista 'home' esté activa
+        setView('home');
     } catch (error) {
         console.error('Error searching schedules:', error);
         hideLoading();
@@ -277,8 +288,6 @@ function displaySchedules(schedules) {
         
         schedulesList.appendChild(card);
     });
-    
-    searchResults.classList.remove('hidden');
 }
 
 async function selectSchedule(scheduleId) {
@@ -297,8 +306,7 @@ async function selectSchedule(scheduleId) {
     await loadSeatMap(scheduleId);
     
     // Show seat selection
-    searchResults.classList.add('hidden');
-    seatSelection.classList.remove('hidden');
+    setView('seat-selection');
 }
 
 async function loadSeatMap(scheduleId) {
@@ -454,9 +462,7 @@ function showReservationForm() {
         <div class="summary-item"><strong>Total:</strong> $${document.getElementById('totalPrice').textContent}</div>
     `;
     
-    seatSelection.classList.add('hidden');
-    reservationForm.classList.remove('hidden');
-    document.getElementById('holdTimer').style.display = 'block';
+    setView('checkout');
 }
 
 async function handleCreateHold() {
@@ -554,7 +560,8 @@ async function handleReservation(e) {
             if (holdCountdownTimer) clearInterval(holdCountdownTimer);
             currentHold = null;
 
-            showPaymentInstructions(result);
+            displayPaymentInstructions(result);
+            setView('success');
         } else {
             showError(result.error || 'Error al crear la reserva');
         }
@@ -564,7 +571,7 @@ async function handleReservation(e) {
     }
 }
 
-function showPaymentInstructions(data) {
+function displayPaymentInstructions(data) {
     document.getElementById('reservationId').textContent = data.reservation_id;
     document.getElementById('finalPrice').textContent = data.total_price;
     document.getElementById('paymentDeadline').textContent = new Date(data.payment_deadline).toLocaleString('es-ES');
@@ -575,9 +582,6 @@ function showPaymentInstructions(data) {
     document.getElementById('whatsappLink').href = `https://wa.me/${whatsappNumberClean}?text=${encodeURIComponent(whatsappMessage)}`;
 
     startCountdown(new Date(data.payment_deadline));
-
-    reservationForm.classList.add('hidden');
-    paymentInstructions.classList.remove('hidden');
 }
 
 function startHoldCountdown(deadline) {
@@ -702,19 +706,8 @@ function displayReservationDetails(reservation) {
 
 // --- Utility Functions ---
 
-function showSection(sectionId) {
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.remove('active');
-    });
-    const sectionToShow = document.getElementById(sectionId);
-    if(sectionToShow) {
-        sectionToShow.classList.add('active');
-    }
-}
-
 function showLoading() {
     loading.classList.remove('hidden');
-    searchResults.classList.add('hidden');
 }
 
 function hideLoading() {
@@ -723,7 +716,6 @@ function hideLoading() {
 
 function showError(message) {
     schedulesList.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-triangle"></i><p>${message}</p></div>`;
-    searchResults.classList.remove('hidden');
 }
 
 function closeModal() {

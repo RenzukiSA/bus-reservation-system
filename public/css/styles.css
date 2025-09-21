@@ -509,3 +509,8 @@ body {
         align-items: center;
     }
 }
+
+/* Utility class for view controller */
+.is-hidden {
+    display: none !important;
+}
