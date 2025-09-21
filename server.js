@@ -1,3 +1,8 @@
+// Solo para desarrollo local, para que nodemon pueda ejecutar archivos .ts
+if (process.env.NODE_ENV !== 'production') {
+    require('ts-node').register();
+}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');

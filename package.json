@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "build": "tsc",
-    "postbuild": "cp -r shared/es.json dist/shared/",
+    "postbuild": "copyfiles -u 1 shared/es.json dist/shared && copyfiles -u 1 -r public/* dist/public",
     "build:shared": "node scripts/build-shared.js"
   },
   "jest": {

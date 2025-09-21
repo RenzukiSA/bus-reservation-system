@@ -1,4 +1,4 @@
-require('ts-node').register();
+// require('ts-node').register(); // Esto se moverá al punto de entrada de desarrollo
 
 const express = require('express');
 const cors = require('cors');
