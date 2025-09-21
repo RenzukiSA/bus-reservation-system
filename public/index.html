@@ -44,12 +44,9 @@
     </button>
 
     <main class="main">
-        <!-- Home Section -->
-        <section id="home" class="section active" data-view="home">
-            <!-- Grid Container -->
+        <!-- Home Section: Search and Results -->
+        <section id="home" class="section is-hidden" data-view="home">
             <div class="home-grid">
-
-                <!-- Search Card -->
                 <article class="card" data-testid="search-card">
                     <div class="card-header">
                         <h3><i class="fas fa-search"></i> Buscar Viaje</h3>
@@ -77,84 +74,54 @@
                     </div>
                 </article>
 
-                <!-- Search Results Card -->
                 <article class="card" data-testid="results-card">
                     <div class="card-header">
-                        <h3><i class="fas fa-list"></i> Viajes Disponibles</h3>
+                        <h3><i class="fas fa-bus"></i> Viajes Disponibles</h3>
                     </div>
                     <div class="card-body">
-                        <div id="loading" class="loading hidden">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Buscando viajes disponibles...</p>
-                        </div>
-                        <div id="searchResults" class="search-results hidden">
-                            <div id="schedulesList" class="schedules-list"></div>
-                            <!-- Empty State for Search Results -->
-                            <div id="noResults" class="empty-state hidden">
-                                <i class="fas fa-route"></i>
-                                <h4>No se encontraron viajes</h4>
-                                <p>Intenta cambiar el origen, destino o la fecha.</p>
-                            </div>
-                        </div>
+                        <div id="loading" class="loading-spinner is-hidden"><i class="fas fa-spinner fa-spin"></i></div>
+                        <div id="schedulesList"></div>
                     </div>
                 </article>
+            </div>
+        </section>
 
-                <!-- Seat Selection Card -->
+        <!-- Seat Selection Section -->
+        <section id="seat-selection-view" class="section is-hidden" data-view="seat">
+            <div class="container">
                 <article class="card" data-testid="seat-selection-card">
                     <div class="card-header">
-                        <button id="backToResults" class="btn btn-secondary btn-sm hidden">
-                            <i class="fas fa-arrow-left"></i> Volver
-                        </button>
-                        <h3 id="selectedScheduleInfo">Selecciona tus Asientos</h3>
+                        <button id="backToResults" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Volver</button>
+                        <h3><i class="fas fa-chair"></i> Selecciona tus Asientos</h3>
+                        <span id="selectedScheduleInfo"></span>
                     </div>
-                    <div id="seatSelection" class="card-body hidden">
-                        <div class="reservation-options">
-                            <div class="option-card">
-                                <input type="radio" id="reserveSeats" name="reservationType" value="seats" checked>
-                                <label for="reserveSeats">
-                                    <i class="fas fa-chair"></i>
-                                    <span>Reservar Asientos</span>
-                                </label>
+                    <div class="card-body seat-map-container">
+                        <div class="bus-layout">
+                            <div class="bus-front">
+                                <i class="fas fa-steering-wheel"></i>
+                                <span>Conductor</span>
                             </div>
-                            <div class="option-card">
-                                <input type="radio" id="reserveFullBus" name="reservationType" value="full_bus">
-                                <label for="reserveFullBus">
-                                    <i class="fas fa-bus"></i>
-                                    <span>Autobús Completo</span>
-                                </label>
+                            <div id="seatMap" class="seat-map"></div>
+                            <!-- Empty State for Seat Map -->
+                            <div id="noSeatMap" class="empty-state hidden">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <h4>No se pudo cargar el mapa de asientos</h4>
+                                <p>Por favor, selecciona un viaje para ver los asientos.</p>
                             </div>
                         </div>
-
-                        <div id="seatMapContainer" class="seat-map-container">
-                            <div class="bus-layout">
-                                <div class="bus-front">
-                                    <i class="fas fa-steering-wheel"></i>
-                                    <span>Conductor</span>
-                                </div>
-                                <div id="seatMap" class="seat-map"></div>
-                                <!-- Empty State for Seat Map -->
-                                <div id="noSeatMap" class="empty-state hidden">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    <h4>No se pudo cargar el mapa de asientos</h4>
-                                    <p>Por favor, selecciona un viaje para ver los asientos.</p>
-                                </div>
-                            </div>
-                            <div class="seat-legend">
-                                <div class="legend-item"><div class="seat-demo available"></div><span>Disponible</span></div>
-                                <div class="legend-item"><div class="seat-demo selected"></div><span>Seleccionado</span></div>
-                                <div class="legend-item"><div class="seat-demo occupied"></div><span>Ocupado</span></div>
-                                <div class="legend-item"><div class="seat-demo premium"></div><span>Premium</span></div>
-                            </div>
+                        <div class="seat-legend">
+                            <div class="legend-item"><div class="seat-demo available"></div><span>Disponible</span></div>
+                            <div class="legend-item"><div class="seat-demo selected"></div><span>Seleccionado</span></div>
+                            <div class="legend-item"><div class="seat-demo occupied"></div><span>Ocupado</span></div>
+                            <div class="legend-item"><div class="seat-demo premium"></div><span>Premium</span></div>
                         </div>
                     </div>
                 </article>
-
-                <!-- Summary Card -->
                 <article class="card" data-testid="summary-card">
                     <div class="card-header">
                         <h3><i class="fas fa-shopping-cart"></i> Resumen de Reserva</h3>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body price-summary">
                         <div class="price-summary">
                             <div class="selected-seats-info">
                                 <h4>Asientos: <span id="selectedSeatsCount">0</span></h4>
@@ -169,16 +136,13 @@
                         </div>
                     </div>
                 </article>
+            </div>
+        </section>
 
-                <!-- Reservation Form (remains hidden until needed) -->
-                <div id="reservationForm" class="reservation-form hidden">
-                    <div id="holdTimer" class="timer-container" style="display: none;">
-                        <div class="timer">
-                            <i class="fas fa-clock"></i>
-                            <span>Tus asientos están reservados por: </span>
-                            <span id="holdCountdown">15:00</span>
-                        </div>
-                    </div>
+        <!-- Checkout Section -->
+        <section id="checkout-view" class="section is-hidden" data-view="checkout">
+            <div class="container">
+                <article class="card" data-testid="customer-form-card">
                     <h3><i class="fas fa-user"></i> Información del Pasajero</h3>
                     <form id="customerForm">
                         <div class="form-row">
@@ -205,10 +169,14 @@
                             <i class="fas fa-check"></i> Confirmar Reserva
                         </button>
                     </form>
-                </div>
+                </article>
+            </div>
+        </section>
 
-                <!-- Payment Instructions (remains hidden until needed) -->
-                <div id="paymentInstructions" class="payment-instructions hidden" data-view="success">
+        <!-- Success Section -->
+        <section id="success-view" class="section is-hidden" data-view="success">
+            <div class="container">
+                <div id="paymentInstructions" class="payment-instructions">
                     <div class="success-icon">
                         <i class="fas fa-check-circle"></i>
                     </div>
@@ -247,8 +215,8 @@
             </div>
         </section>
 
-        <!-- Reservations Section -->
-        <section id="reservations" class="section" data-view="lookup">
+        <!-- Reservations Lookup Section -->
+        <section id="reservations" class="section is-hidden" data-view="lookup">
             <div class="container">
                 <h2><i class="fas fa-ticket-alt"></i> Consultar Reserva</h2>
                 <div class="search-card">
@@ -271,7 +239,7 @@
         </section>
 
         <!-- Admin Section -->
-        <section id="admin" class="section" data-view="admin">
+        <section id="admin" class="section is-hidden" data-view="admin">
             <div class="container">
                 <h2><i class="fas fa-cog"></i> Panel Administrativo</h2>
                 <div class="admin-tabs">
