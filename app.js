@@ -45,9 +45,10 @@ if (IS_PROD) {
 
 app.use(express.json());
 
-// Servir estáticos de forma robusta, como sugeriste.
-// Esto crea un prefijo virtual '/public' que apunta a la carpeta 'public' en la raíz del proyecto.
-app.use('/public', express.static(path.join(__dirname, '..', 'public')));
+// Servir estáticos de forma robusta.
+// En producción, __dirname es /dist, y la carpeta public se copia a /dist/public.
+// Por lo tanto, la ruta correcta es simplemente 'public' relativa a __dirname.
+app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '7d', etag: true }));
 
 // Endpoint de verificación de assets (solo para desarrollo)
 if (!IS_PROD) {
