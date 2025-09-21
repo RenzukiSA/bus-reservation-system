@@ -44,6 +44,9 @@ if (IS_PROD) {
 }
 
 app.use(express.json());
+// Servir archivos estáticos desde la carpeta 'public'.
+// En desarrollo, __dirname es la raíz del proyecto y sirve desde /public.
+// En producción, el script se ejecuta desde /dist, por lo que __dirname es /dist y sirve desde /dist/public (que es donde se copia).
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
