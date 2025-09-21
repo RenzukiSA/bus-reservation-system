@@ -56,14 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
         loadRoutes();
         setMinDate();
         setView('home');
-        // Asegurarse de que el estado inicial sea el correcto
-        const searchResultsCard = document.querySelector('[data-testid="results-card"]');
-        if (searchResultsCard) {
-            document.getElementById('schedulesList').innerHTML = '';
-            document.getElementById('results-initial-state').classList.remove('is-hidden');
+
+        // Mostrar el estado inicial en la tarjeta de resultados
+        const resultsInitialState = document.getElementById('results-initial-state');
+        if (resultsInitialState) {
+            resultsInitialState.classList.remove('is-hidden');
         }
-        setBookingStep(null); // Hide all booking steps initially
-        noResults.classList.remove('is-hidden');
+        // Ocultar la lista de horarios y el spinner de carga
+        document.getElementById('schedulesList').innerHTML = '';
+        document.getElementById('loading').classList.add('is-hidden');
     }
 
     // --- Event Listeners ---
