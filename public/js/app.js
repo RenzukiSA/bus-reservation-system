@@ -145,6 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('proceedToReservation').addEventListener('click', handleCreateHold);
         document.getElementById('customerForm').addEventListener('submit', handleReservation);
         document.getElementById('reservationSearchForm').addEventListener('submit', handleReservationSearch);
+
+        // Select seats button
+        document.querySelectorAll('.js-select-seats').forEach(button => {
+            button.addEventListener('click', async function() {
+                const scheduleId = this.dataset.scheduleId;
+                await selectSchedule(scheduleId);
+            });
+        });
     }
 
     initializeApp();
@@ -213,6 +221,14 @@ function setupEventListeners() {
     document.querySelector('.modal-close').addEventListener('click', closeModal);
     document.getElementById('modal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
+    });
+
+    // Select seats button
+    document.querySelectorAll('.js-select-seats').forEach(button => {
+        button.addEventListener('click', async function() {
+            const scheduleId = this.dataset.scheduleId;
+            await selectSchedule(scheduleId);
+        });
     });
 }
 
@@ -368,7 +384,7 @@ function displaySchedules(schedules) {
                 </div>
             </div>
             <div class="schedule-actions">
-                <button class="btn btn-primary" onclick="selectSchedule(${schedule.schedule_id})" 
+                <button class="btn btn-primary js-select-seats" data-schedule-id="${schedule.schedule_id}" 
                         ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
                     <i class="fas fa-chair"></i> Seleccionar Asientos
                 </button>
@@ -379,7 +395,10 @@ function displaySchedules(schedules) {
     });
 }
 
-async function selectSchedule(scheduleId) {
+/**
+ * Expone la función al scope global para que el `onclick` del HTML pueda encontrarla.
+ */
+window.selectSchedule = async function(scheduleId) {
     selectedSchedule = currentSchedules.find(s => s.schedule_id === scheduleId);
     
     if (!selectedSchedule) {
