@@ -61,18 +61,17 @@ document.addEventListener('DOMContentLoaded', () => {
         loadRoutes();
         setMinDate();
 
-        // Estado inicial de la aplicación
-        setView('home'); // Mostrar la sección principal (búsqueda y resultados)
+        // Estado inicial explícito y sin ambigüedad:
+        // 1. Muestra la vista principal 'home'.
+        setView('home');
         
-        // NO llamar a setBookingStep(null) aquí, ya que oculta el contenido de 'home'.
-        // Los sub-pasos ya están ocultos por defecto en el HTML con 'is-hidden'.
-
-        const resultsInitialState = document.getElementById('results-initial-state');
-        if (resultsInitialState) {
-            resultsInitialState.classList.remove('is-hidden');
-        }
-        document.getElementById('schedulesList').innerHTML = '';
-        document.getElementById('loading').classList.add('is-hidden');
+        // 2. Dentro de 'home', establece el paso activo a 'searchResults'.
+        setBookingStep(searchResults);
+        
+        // 3. Asegura que el mensaje inicial esté visible y el resto limpio.
+        noResults.classList.remove('is-hidden');
+        schedulesList.innerHTML = '';
+        loading.classList.add('is-hidden');
     }
 
     // --- Event Listeners ---
