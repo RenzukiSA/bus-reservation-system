@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- View Controller ---
     const mainViews = document.querySelectorAll('[data-view]');
-    const bookingSteps = [searchResults, seatSelection, reservationForm, paymentInstructions];
+    const bookingSteps = [seatSelection, reservationForm, paymentInstructions]; // Removemos searchResults
 
     function setView(viewName) {
         mainViews.forEach(view => {
@@ -65,13 +65,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Muestra la vista principal 'home'.
         setView('home');
         
-        // 2. Dentro de 'home', establece el paso activo a 'searchResults'.
-        setBookingStep(searchResults);
+        // 2. Oculta todos los pasos de reserva (asientos, checkout, success).
+        setBookingStep(null);
         
-        // 3. Asegura que el mensaje inicial esté visible y el resto limpio.
-        noResults.classList.remove('is-hidden');
-        schedulesList.innerHTML = '';
-        loading.classList.add('is-hidden');
+        // 3. Asegura que el contenido inicial de búsqueda esté visible.
+        if (noResults) noResults.classList.remove('is-hidden');
+        if (schedulesList) schedulesList.innerHTML = '';
+        if (loading) loading.classList.add('is-hidden');
+        if (searchResults) searchResults.classList.remove('is-hidden');
     }
 
     // --- Event Listeners ---
@@ -93,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Back to Results
         document.getElementById('backToResults').addEventListener('click', async () => {
-            setBookingStep(searchResults);
+            setBookingStep(null);
             if (currentHold) await releaseHold();
         });
 
@@ -194,11 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function displaySchedules(schedules) {
         schedulesList.innerHTML = '';
         if (schedules.length === 0) {
-            noResults.classList.remove('is-hidden');
+            if (noResults) {
+                noResults.innerHTML = '<div class="empty-state"><i class="fas fa-search-location"></i><h4>No se encontraron viajes para la fecha seleccionada</h4><p>Intenta con otra fecha o ruta.</p></div>';
+                noResults.classList.remove('is-hidden');
+            }
         } else {
-            noResults.classList.add('is-hidden');
+            if (noResults) noResults.classList.add('is-hidden');
             schedules.forEach(schedule => {
-                // ... (your existing schedule card creation logic)
                  const card = document.createElement('div');
                  card.className = 'schedule-card';
                  const availabilityText = schedule.is_full_bus_available ? 'Autobús completo disponible' : `${schedule.available_seats} asientos disponibles`;
@@ -214,22 +217,30 @@ document.addEventListener('DOMContentLoaded', () => {
                          <div class="info-item"><div class="label">Autobús completo</div><div class="value">$${schedule.full_bus_price}</div></div>
                      </div>
                      <div class="schedule-actions">
-                         <button class="btn btn-primary js-select-seats" data-trip-id="${schedule.schedule_id}" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
+                         <button class="btn btn-primary js-select-seats" data-schedule-id="${schedule.schedule_id}" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
                              <i class="fas fa-chair"></i> Seleccionar Asientos
                          </button>
                      </div>`;
                  schedulesList.appendChild(card);
             });
         }
-        setBookingStep(searchResults);
+        
+        // Asegurar que el contenedor de resultados esté visible
+        if (searchResults) searchResults.classList.remove('is-hidden');
+        setBookingStep(null);
     }
 
     window.selectSchedule = async function(scheduleId) {
-        selectedSchedule = currentSchedules.find(s => s.schedule_id === scheduleId);
+        selectedSchedule = currentSchedules.find(s => String(s.schedule_id) === String(scheduleId));
         if (!selectedSchedule) return showError('Error al seleccionar el horario');
         
-        document.getElementById('selectedScheduleInfo').textContent = `${selectedSchedule.departure_time} - ${selectedSchedule.arrival_time} | ${selectedSchedule.bus_number}`;
+        const selectedScheduleInfo = document.getElementById('selectedScheduleInfo');
+        if (selectedScheduleInfo) {
+            selectedScheduleInfo.textContent = `${selectedSchedule.departure_time} - ${selectedSchedule.arrival_time} | ${selectedSchedule.bus_number}`;
+        }
+        
         await loadSeatMap(scheduleId);
+        setView('seat');
         setBookingStep(seatSelection);
     }
 
@@ -706,7 +717,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const btn = e.target.closest('.js-select-seats');
         if (!btn) return;
         e.preventDefault();
-        const tripId = btn.dataset.tripId;
+        const tripId = btn.dataset.scheduleId;
         if (!tripId) return console.warn('missing trip id');
 
         const seatBox = document.querySelector('#seatmap-container,[data-seatmap], #seatMap');
