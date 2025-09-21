@@ -55,16 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners();
         loadRoutes();
         setMinDate();
-        setView('home');
 
-        // Mostrar el estado inicial en la tarjeta de resultados
-        const resultsInitialState = document.getElementById('results-initial-state');
-        if (resultsInitialState) {
-            resultsInitialState.classList.remove('is-hidden');
-        }
-        // Ocultar la lista de horarios y el spinner de carga
-        document.getElementById('schedulesList').innerHTML = '';
-        document.getElementById('loading').classList.add('is-hidden');
+        // Estado inicial de la aplicación
+        setView('home'); // Mostrar la sección principal
+        setBookingStep(null); // Ocultar todos los pasos de reserva (asientos, formulario, etc.)
+        document.getElementById('results-initial-state').classList.remove('is-hidden'); // Mostrar mensaje inicial
+        document.getElementById('schedulesList').innerHTML = ''; // Limpiar resultados previos
+        document.getElementById('loading').classList.add('is-hidden'); // Ocultar spinner
     }
 
     // --- Event Listeners ---
@@ -207,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          <div class="info-item"><div class="label">Autobús completo</div><div class="value">$${schedule.full_bus_price}</div></div>
                      </div>
                      <div class="schedule-actions">
-                         <button class="btn btn-primary" onclick="selectSchedule(${schedule.schedule_id})" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
+                         <button class="btn btn-primary js-select-seats" data-trip-id="${schedule.schedule_id}" ${schedule.available_seats === 0 && !schedule.is_full_bus_available ? 'disabled' : ''}>
                              <i class="fas fa-chair"></i> Seleccionar Asientos
                          </button>
                      </div>`;
@@ -702,6 +699,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 })();
+
+// ========================================
+// DELEGACIÓN PARA SELECCIÓN DE ASIENTOS
+// ========================================
+document.addEventListener('DOMContentLoaded', ()=>{
+    const tripsRoot = document.querySelector('#trips-list, [data-trips], .trips-list, #schedulesList');
+    if (!tripsRoot) return;
+    tripsRoot.addEventListener('click', async (e)=>{
+        const btn = e.target.closest('.js-select-seats');
+        if (!btn) return;
+        e.preventDefault();
+        const tripId = btn.dataset.tripId;
+        if (!tripId) return console.warn('missing trip id');
+
+        const seatBox = document.querySelector('#seatmap-container,[data-seatmap], #seatMap');
+        if (seatBox) seatBox.innerHTML = '<div class="muted">Cargando asientos…</div>';
+
+        try {
+            let res = await fetch(`/api/seats?tripId=${encodeURIComponent(tripId)}` );
+            if (!res.ok) {
+                const alt = await fetch(`/api/trips/${encodeURIComponent(tripId)}/seats` );
+                if (alt.ok) res = alt; else throw new Error('no seats endpoint ok');
+            }
+            const data = await res.json();
+
+            if (typeof window.renderSeatMap === 'function') {
+                window.renderSeatMap(data, { tripId });
+            } else if (seatBox) {
+                seatBox.innerHTML = Array.isArray(data)&&data.length ? 'Mapa de asientos cargado.' : 'No hay asientos.';
+            }
+
+            window.setView?.('seat');
+            seatBox?.scrollIntoView({behavior:'smooth', block:'start'});
+        } catch (err) {
+            console.error(err);
+            if (seatBox) seatBox.innerHTML = '<div class="error">No se pudo cargar el mapa. Reintenta.</div>';
+        }
+    });
+});
 
 // ========================================
 // CAPTURADORES DE ERRORES GLOBALES
