@@ -51,7 +51,7 @@ app.use('/public', express.static(path.resolve(__dirname, 'public'), { maxAge: '
 
 // Añadir una ruta explícita para servir index.html en la raíz
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.resolve(__dirname, '../public/index.html'));
 });
 
 // Ruta para servir la página de login
