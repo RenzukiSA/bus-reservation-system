@@ -73,6 +73,16 @@ Para desplegar esta aplicación en un servicio como [Render](https://render.com/
 -   **Ubicación de los archivos fuente**: Los archivos que se deben editar están en la carpeta `public/` en la raíz del proyecto.
 -   **Nota sobre la compilación**: La configuración de Express (`express.static(path.join(__dirname, 'public'))`) funciona tanto en desarrollo como en producción. En desarrollo, `__dirname` es la raíz del proyecto. En producción, el script `postbuild` copia la carpeta `public` dentro de `dist`, y como el servidor se ejecuta desde `dist`, `__dirname` apunta a `dist`, encontrando la carpeta `public` correctamente en su interior.
 
+## Assets en Producción
+
+-   **Rutas Absolutas**: Todas las referencias a archivos estáticos (CSS, JS, imágenes) en el HTML deben usar rutas absolutas que comiencen con `/public/`. Por ejemplo: `/public/css/styles.css`.
+
+-   **Comportamiento del Servidor**: La aplicación utiliza una estrategia de doble middleware para servir archivos estáticos, lo que garantiza su funcionamiento tanto en desarrollo como en producción. En producción, `__dirname` apunta a la carpeta `dist/`, y el servidor sirve los archivos desde `../public` (la carpeta `public/` en la raíz del proyecto).
+
+-   **Cómo Probar**: Para verificar que las rutas de los assets son correctas, puedes acceder a dos URLs en tu entorno de desarrollo:
+    1.  Abre `http://localhost:3000/__assets` en tu navegador. Deberías ver un JSON con las rutas correctas.
+    2.  Abre `http://localhost:3000/public/css/styles.css`. Deberías ver el contenido de tu archivo CSS.
+
 ## Estructura del proyecto
 
 ```

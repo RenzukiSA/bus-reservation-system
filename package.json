@@ -4,12 +4,12 @@
   "description": "Sistema de reservas de autobuses para empresas de transporte",
   "main": "server.js",
   "scripts": {
+    "build": "tsc",
+    "prestart": "npm run build",
     "start": "node dist/server.js",
     "dev": "nodemon server.js",
     "test": "jest --coverage",
-    "build": "tsc",
-    "postbuild": "copyfiles -u 1 database/**/*.sql dist/database && copyfiles -u 1 shared/es.json dist/shared && copyfiles -u 1 -r public/* dist/public",
-    "prestart": "npm run build"
+    "postbuild": "copyfiles -u 1 database/**/*.sql dist/database && copyfiles -u 1 shared/es.json dist/shared && copyfiles -u 1 -r public/* dist/public"
   },
   "jest": {
     "preset": "ts-jest",
