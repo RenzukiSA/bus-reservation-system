@@ -45,7 +45,7 @@
 
     <main class="main">
         <!-- Home Section -->
-        <section id="home" class="section active">
+        <section id="home" class="section active" data-view="home">
             <!-- Grid Container -->
             <div class="home-grid">
 
@@ -208,7 +208,7 @@
                 </div>
 
                 <!-- Payment Instructions (remains hidden until needed) -->
-                <div id="paymentInstructions" class="payment-instructions hidden">
+                <div id="paymentInstructions" class="payment-instructions hidden" data-view="success">
                     <div class="success-icon">
                         <i class="fas fa-check-circle"></i>
                     </div>
@@ -245,7 +245,7 @@
         </section>
 
         <!-- Reservations Section -->
-        <section id="reservations" class="section">
+        <section id="reservations" class="section" data-view="lookup">
             <div class="container">
                 <h2><i class="fas fa-ticket-alt"></i> Consultar Reserva</h2>
                 <div class="search-card">
@@ -268,7 +268,7 @@
         </section>
 
         <!-- Admin Section -->
-        <section id="admin" class="section">
+        <section id="admin" class="section" data-view="admin">
             <div class="container">
                 <h2><i class="fas fa-cog"></i> Panel Administrativo</h2>
                 <div class="admin-tabs">
