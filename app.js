@@ -26,6 +26,22 @@ const app = express();
 app.use(helmet());
 app.use(compression());
 
+// Servir public desde ambas ubicaciones (ejecutando desde dist y desde raíz)
+// ESTOS DEBEN IR ANTES de los middlewares de autenticación
+app.use('/public', express.static(path.resolve(__dirname, '../public'), { maxAge: '7d', etag: true }));
+app.use('/public', express.static(path.resolve(__dirname, 'public'), { maxAge: '7d', etag: true }));
+
+// Rutas públicas que NO requieren autenticación (ANTES de session y CSRF)
+app.get('/', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../public/index.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../public/login.html'));
+});
+
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+
 // Logger Middleware
 app.use((req, res, next) => {
     const requestId = uuidv4();
@@ -45,20 +61,6 @@ if (IS_PROD) {
 }
 
 app.use(express.json());
-
-// Servir public desde ambas ubicaciones (ejecutando desde dist y desde raíz)
-// ESTOS DEBEN IR ANTES de los middlewares de autenticación
-app.use('/public', express.static(path.resolve(__dirname, '../public'), { maxAge: '7d', etag: true }));
-app.use('/public', express.static(path.resolve(__dirname, 'public'), { maxAge: '7d', etag: true }));
-
-// Rutas públicas que NO requieren autenticación (ANTES de session y CSRF)
-app.get('/', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../public/index.html'));
-});
-
-app.get('/login', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../public/login.html'));
-});
 
 // POST /login - Validar credenciales y crear sesión
 app.post('/login', async (req, res) => {
@@ -101,8 +103,6 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
-
-app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
 
 // Configurar sesiones DESPUÉS de las rutas públicas pero ANTES de CSRF y rutas protegidas
 app.use(session({
