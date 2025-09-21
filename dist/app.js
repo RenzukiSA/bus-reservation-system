@@ -1,5 +1,5 @@
-// require('ts-node').register(); // Esto se moverá al punto de entrada de desarrollo
-
+"use strict";
+require('ts-node').register();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -9,22 +9,17 @@ const csurf = require('csurf');
 const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
-
 const pool = require('./database/db');
 const reservationRoutes = require('./routes/reservations');
 const adminRoutes = require('./routes/admin');
 const busRoutes = require('./routes/buses');
 const routesRoutes = require('./routes/routes');
 const holdsRoutes = require('./routes/holds');
-
 const IS_PROD = process.env.NODE_ENV === 'production';
-
 const app = express();
-
 // Middlewares de seguridad y rendimiento van PRIMERO
 app.use(helmet());
 app.use(compression());
-
 // Logger Middleware
 app.use((req, res, next) => {
     const requestId = uuidv4();
@@ -38,14 +33,11 @@ app.use((req, res, next) => {
     });
     next();
 });
-
 if (IS_PROD) {
     app.set('trust proxy', 1);
 }
-
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
 app.use(session({
     store: new pgSession({
         pool: pool,
@@ -57,13 +49,11 @@ app.use(session({
     cookie: {
         secure: IS_PROD,
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, 
+        maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'lax'
     }
 }));
-
 const csrfProtection = csurf();
-
 if (process.env.NODE_ENV !== 'test') {
     app.use((req, res, next) => {
         if (req.path === '/api/reservations/expire-pending' || req.path === '/api/holds/expire') {
@@ -72,29 +62,27 @@ if (process.env.NODE_ENV !== 'test') {
         csrfProtection(req, res, next);
     });
 }
-
 app.get('/admin.html', (req, res) => {
     if (req.session.isAdmin) {
         res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-    } else {
+    }
+    else {
         res.status(403).send('Acceso denegado');
     }
 });
-
 const apiLimiter = require('./middleware/rateLimiter');
 app.use('/api/reservations', apiLimiter, reservationRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routesRoutes);
 app.use('/api/holds', holdsRoutes);
-
 app.use((err, req, res, next) => {
     if (err.code === 'EBADCSRFTOKEN') {
         console.warn(`Intento de CSRF bloqueado desde la IP: ${req.ip}`);
         res.status(403).json({ error: 'Token CSRF inválido o ausente. Petición bloqueada.' });
-    } else {
+    }
+    else {
         next(err);
     }
 });
-
 module.exports = app;
