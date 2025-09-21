@@ -59,6 +59,95 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Global State ---
+    let currentSchedules = [];
+    let selectedSchedule = null;
+    let selectedSeats = [];
+    let seatMap = [];
+    let reservationType = 'seats';
+    let countdownTimer = null;
+    let holdCountdownTimer = null;
+    let currentHold = null;
+
+    // --- API ---
+    const API_BASE = '/api';
+
+    // --- DOM Elements ---
+    const searchForm = document.getElementById('searchForm');
+    const originSelect = document.getElementById('origin');
+    const destinationSelect = document.getElementById('destination');
+    const travelDateInput = document.getElementById('travelDate');
+    const loading = document.getElementById('loading');
+    const searchResults = document.getElementById('searchResults');
+    const schedulesList = document.getElementById('schedulesList');
+    const noResults = document.getElementById('noResults');
+    const seatSelection = document.getElementById('seatSelection');
+    const seatMapContainer = document.getElementById('seatMap');
+    const reservationForm = document.getElementById('reservationForm');
+    const paymentInstructions = document.getElementById('paymentInstructions');
+
+    // --- View Controller ---
+    const mainViews = document.querySelectorAll('[data-view]');
+    const bookingSteps = [searchResults, seatSelection, reservationForm, paymentInstructions];
+
+    function setView(viewName) {
+        mainViews.forEach(view => {
+            view.classList.toggle('is-hidden', view.dataset.view !== viewName);
+        });
+    }
+
+    function setBookingStep(stepToShow) {
+        bookingSteps.forEach(step => {
+            step.classList.toggle('is-hidden', step !== stepToShow);
+        });
+    }
+
+    // --- Initialization ---
+    function initializeApp() {
+        setupEventListeners();
+        loadRoutes();
+        setMinDate();
+        setView('home');
+        setBookingStep(null); // Hide all booking steps initially
+        noResults.classList.remove('is-hidden');
+    }
+
+    // --- Event Listeners ---
+    function setupEventListeners() {
+        // Main Navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const viewName = this.getAttribute('href').substring(1);
+                setView(viewName);
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Search
+        searchForm.addEventListener('submit', handleSearch);
+        originSelect.addEventListener('change', updateDestinations);
+
+        // Back to Results
+        document.getElementById('backToResults').addEventListener('click', async () => {
+            setBookingStep(searchResults);
+            if (currentHold) await releaseHold();
+        });
+
+        // Reservation Flow
+        document.querySelectorAll('input[name="reservationType"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                reservationType = this.value;
+                updateSeatSelection();
+            });
+        });
+        document.getElementById('proceedToReservation').addEventListener('click', handleCreateHold);
+        document.getElementById('customerForm').addEventListener('submit', handleReservation);
+        document.getElementById('reservationSearchForm').addEventListener('submit', handleReservationSearch);
+    }
+
+    initializeApp();
     setupEventListeners();
     loadRoutes();
     setMinDate();
