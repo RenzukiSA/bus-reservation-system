@@ -45,10 +45,9 @@ if (IS_PROD) {
 
 app.use(express.json());
 
-// Servir estáticos de forma robusta.
-// En producción, __dirname es /dist, y la carpeta public se copia a /dist/public.
-// Por lo tanto, la ruta correcta es simplemente 'public' relativa a __dirname.
-app.use('/public', express.static(path.join(__dirname, 'public'), { maxAge: '7d', etag: true }));
+// Servir public desde ambas ubicaciones (ejecutando desde dist y desde raíz)
+app.use('/public', express.static(path.resolve(__dirname, '../public'), { maxAge: '7d', etag: true }));
+app.use('/public', express.static(path.resolve(__dirname, 'public'), { maxAge: '7d', etag: true }));
 
 // Añadir una ruta explícita para servir index.html en la raíz
 app.get('/', (req, res) => {
