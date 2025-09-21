@@ -236,9 +236,12 @@
                             </div>
                         </div>
                         
-                        <a id="whatsappLink" class="btn btn-whatsapp" target="_blank">
-                            <i class="fab fa-whatsapp"></i> Enviar por WhatsApp
-                        </a>
+                        <div class="success-actions">
+                            <button id="copyReservationIdBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copiar ID</button>
+                            <a id="whatsappPayLink" class="btn btn-whatsapp" target="_blank"><i class="fab fa-whatsapp"></i> Pagar ahora</a>
+                            <!-- TODO: Implementar endpoint GET /reservations/:id/ticket.pdf -->
+                            <a id="downloadPdfBtn" href="#" class="btn btn-info is-hidden" target="_blank"><i class="fas fa-file-pdf"></i> Descargar PDF</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -374,6 +377,7 @@
 
     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
     <script src="/public/js/shared-validation.js"></script>
+    <script src="/public/js/wa.js"></script>
     <script src="/public/js/app.js"></script>
     <script src="/public/js/seatmap.js"></script>
 </body>

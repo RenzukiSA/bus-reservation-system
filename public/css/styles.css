@@ -470,6 +470,14 @@ body {
     color: #666;
 }
 
+.success-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
 /* --- Footer --- */
 .footer {
     background: #333;
