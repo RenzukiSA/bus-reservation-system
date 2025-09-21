@@ -20,8 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loading = document.getElementById('loading');
     const searchResults = document.getElementById('searchResults');
     const schedulesList = document.getElementById('schedulesList');
-    const noResults = document.getElementById('noResults');
-    const seatSelection = document.getElementById('seatSelection');
+    const noResults = document.getElementById('results-initial-state');
+    const seatSelection = document.getElementById('seat-selection-view');
     const seatMapContainer = document.getElementById('seatMap');
     const reservationForm = document.getElementById('reservationForm');
     const paymentInstructions = document.getElementById('paymentInstructions');
@@ -51,17 +51,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     async function initializeApp() {
-        await updateAuthUI(); // Comprobar estado de autenticación primero
+        await updateAuthUI();
         setupEventListeners();
         loadRoutes();
         setMinDate();
 
         // Estado inicial de la aplicación
-        setView('home'); // Mostrar la sección principal
-        setBookingStep(null); // Ocultar todos los pasos de reserva (asientos, formulario, etc.)
-        document.getElementById('results-initial-state').classList.remove('is-hidden'); // Mostrar mensaje inicial
-        document.getElementById('schedulesList').innerHTML = ''; // Limpiar resultados previos
-        document.getElementById('loading').classList.add('is-hidden'); // Ocultar spinner
+        setView('home'); // Mostrar la sección principal (búsqueda y resultados)
+        
+        // NO llamar a setBookingStep(null) aquí, ya que oculta el contenido de 'home'.
+        // Los sub-pasos ya están ocultos por defecto en el HTML con 'is-hidden'.
+
+        const resultsInitialState = document.getElementById('results-initial-state');
+        if (resultsInitialState) {
+            resultsInitialState.classList.remove('is-hidden');
+        }
+        document.getElementById('schedulesList').innerHTML = '';
+        document.getElementById('loading').classList.add('is-hidden');
     }
 
     // --- Event Listeners ---
