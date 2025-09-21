@@ -682,3 +682,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Start App ---
     initializeApp();
 });
+
+// ========================================
+// SISTEMA DE INICIALIZACIÓN A PRUEBA DE FALLOS
+// ========================================
+(function init(){
+    try {
+        if (typeof window.setView === 'function') {
+            window.setView('home');
+        } else {
+            document.querySelectorAll('[data-view]').forEach(s=>{
+                s.classList.toggle('is-hidden', s.dataset.view !== 'home');
+            });
+        }
+    } catch (e) {
+        console.error('init error', e);
+        document.querySelectorAll('[data-view]').forEach(s=>{
+            s.classList.toggle('is-hidden', s.dataset.view !== 'home');
+        });
+    }
+})();
+
+// ========================================
+// CAPTURADORES DE ERRORES GLOBALES
+// ========================================
+window.onerror = (m,s,l,c,e)=>console.error('window.onerror', m,s,l,c,e);
+window.onunhandledrejection = ev=>console.error('unhandled', ev.reason);
