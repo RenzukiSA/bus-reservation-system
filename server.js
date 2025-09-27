@@ -6,6 +6,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Importaciones necesarias para autenticación
 const path = require('path');
+const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
