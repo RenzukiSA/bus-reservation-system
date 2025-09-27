@@ -1,3 +1,18 @@
+// FAILSAFE DE INICIALIZACIÓN
+(function init(){
+    try {
+        document.querySelectorAll('[data-view]').forEach(s=>{
+            s.classList.toggle('is-hidden', s.dataset.view !== 'home');
+        });
+    } catch(e) {
+        console.error('init error', e);
+    }
+})();
+
+// LOGS GLOBALES
+window.onerror = (m,s,l,c,e)=>console.error('window.onerror', m,s,l,c,e);
+window.onunhandledrejection = ev=>console.error('unhandled', ev.reason);
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Global State ---
     let currentSchedules = [];

@@ -17,7 +17,29 @@ const { initDatabase } = require('./database/init');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-// Configurar sesiones
+// SERVIR ARCHIVOS ESTÁTICOS ANTES DE CUALQUIER MIDDLEWARE DE AUTH
+app.use('/public', express.static(path.resolve(__dirname, '../public'), { maxAge: '7d', etag: true }));
+app.use('/public', express.static(path.resolve(__dirname, 'public'), { maxAge: '7d', etag: true }));
+
+// RUTAS PÚBLICAS SIEMPRE ACCESIBLES (ANTES DE AUTH)
+app.get('/', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../public/index.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../public/login.html'));
+});
+
+app.get('/healthz', (req, res) => res.status(200).json({ ok: true }));
+
+// ENDPOINT DE DIAGNÓSTICO TEMPORAL
+app.get('/__assets', (req, res) => res.json({ 
+    css: '/public/css/styles.css', 
+    js: '/public/js/app.js', 
+    ok: true 
+}));
+
+// CONFIGURAR SESIONES
 app.use(session({
     store: new pgSession({
         pool: pool,
@@ -34,12 +56,7 @@ app.use(session({
     }
 }));
 
-// GET /login - Servir página de login
-app.get('/login', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../public/login.html'));
-});
-
-// POST /login - Validar credenciales y crear sesión
+// POST /login - Validar credenciales y crear sesión (NO PROTEGIDO)
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -81,7 +98,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Middleware requireAdmin
+// MIDDLEWARE requireAdmin SOLO PARA RUTAS ESPECÍFICAS
 const requireAdmin = (req, res, next) => {
     if (req.session.user && req.session.user.role === 'admin') {
         return next();
@@ -89,7 +106,7 @@ const requireAdmin = (req, res, next) => {
     res.status(403).send('Acceso denegado. Se requieren privilegios de administrador.');
 };
 
-// Aplicar middleware de admin SOLO a rutas específicas
+// APLICAR MIDDLEWARE DE ADMIN SOLO A RUTAS ESPECÍFICAS
 app.use('/admin', requireAdmin);
 app.use('/api/admin', requireAdmin);
 
@@ -105,7 +122,7 @@ initDatabase(pool)
         console.log('Base de datos inicializada correctamente.');
         // Iniciamos el servidor y lo configuramos para que escuche en el puerto especificado
         app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Servidor escuchando en el puerto ${PORT}`);
+            console.log(`Listening on ${PORT}`);
         });
     })
     .catch(error => {
